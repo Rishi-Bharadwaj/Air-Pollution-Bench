@@ -1,0 +1,120 @@
+# Paths relative to this file's location
+time_repo: .                     # path to the TIME repo (contains experiments/)
+data_dir: ../data/hf_dataset     # where converted HF Arrow datasets live (= TIME_DATASET)
+datasets_config: datasets.yaml   # your dataset config (test/val/prediction lengths)
+
+# Models and their dependencies
+models:
+
+  chronos_bolt:
+    script: experiments/chronos_bolt.py
+    packages:
+      - chronos-forecasting
+      - torch
+    args:
+      model_size: base
+      batch_size: 16
+      context_length: 2048
+
+  chronos2:
+    script: experiments/chronos2.py
+    packages:
+      - chronos-forecasting
+      - torch
+    args:
+      model_size: base
+      batch_size: 16
+      context_length: 2048
+
+  moirai:
+    script: experiments/moirai.py
+    packages:
+      - uni2ts
+    args:
+      model_size: base
+      batch_size: 16
+      context_length: 4000
+
+  moirai2:
+    script: experiments/moirai2.py
+    packages:
+      - uni2ts
+    args:
+      model_size: base
+      batch_size: 16
+      context_length: 4000
+
+  timesfm1:
+    script: experiments/timesfm1.0.py
+    packages:
+      - timesfm
+      - torch
+    args:
+      batch_size: 32
+      context_length: 512
+
+  timesfm2:
+    script: experiments/timesfm2.0.py
+    packages:
+      - timesfm
+      - torch
+    args:
+      batch_size: 32
+      context_length: 512
+
+  timesfm25:
+    script: experiments/timesfm2.5.py
+    packages:
+      - git+https://github.com/google-research/timesfm.git
+      - torch
+    args:
+      batch_size: 32
+      context_length: 1024
+
+  sundial:
+    script: experiments/sundial.py
+    packages:
+      - transformers==4.40.1
+      - torch
+    args:
+      batch_size: 16
+
+  tirex:
+    script: experiments/tirex_model.py
+    packages:
+      - tirex-ts
+    args:
+      batch_size: 16
+
+  toto:
+    script: experiments/toto_model.py
+    packages:
+      - toto-ts
+    args:
+      batch_size: 16
+
+  visionts:
+    script: experiments/visiontspp.py
+    packages:
+      - visionts
+      - torch
+    args:
+      batch_size: 16
+
+  seasonal_naive:
+    script: experiments/seasonal_naive.py
+    packages:
+      - statsforecast
+
+  # kairos requires cloning the Kairos repo into experiments/Kairos/ first:
+  #   git clone <kairos_repo> TIME/TIME/experiments/Kairos
+  # kairos:
+  #   script: experiments/kairos_model.py
+  #   packages:
+  #     - python-dotenv
+  #     - pyarrow
+
+# Default datasets to run when no dataset= override is given
+datasets:
+  - Water_Quality_Darwin/15T
+  - SG_PM25/H
