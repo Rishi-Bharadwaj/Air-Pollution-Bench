@@ -1,6 +1,6 @@
 # Paths relative to this file's location
 time_repo: .                     # path to the TIME repo (contains experiments/)
-data_dir: ../data/hf_dataset     # where converted HF Arrow datasets live (= TIME_DATASET)
+data_dir: ./data/hf_dataset     # where converted HF Arrow datasets live (= TIME_DATASET)
 datasets_config: datasets.yaml   # your dataset config (test/val/prediction lengths)
 
 # Models and their dependencies
