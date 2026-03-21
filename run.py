@@ -66,11 +66,27 @@ def run_experiment(
     packages = model_cfg.get("packages", [])
     extra_args = model_cfg.get("args", {})
 
-    cmd = ["uv", "run"]
-    for pkg in packages:
-        cmd += ["--with", pkg]
-    cmd += [
-        "python", str(script),
+    # Install model-specific packages into the project venv so that the
+    # venv's torch (built for the local GPU) is reused rather than overridden
+    # by uv's ephemeral --with environments.
+    venv_python = time_repo / ".venv" / "bin" / "python"
+    python_bin = str(venv_python) if venv_python.exists() else "python"
+
+    if packages:
+        # Install model packages, then force-reinstall torch from the cu128 index
+        # so that model packages (e.g. uni2ts) cannot pull in a PyPI torch that
+        # lacks sm_120 (Blackwell) support.
+        install_cmd = ["uv", "pip", "install"] + packages
+        print(f"Installing packages: {' '.join(packages)}")
+        subprocess.run(install_cmd, cwd=time_repo, check=True)
+        subprocess.run(
+            ["uv", "pip", "install", "torch>=2.6.0",
+             "--index-url", "https://download.pytorch.org/whl/cu128"],
+            cwd=time_repo, check=True,
+        )
+
+    cmd = [
+        python_bin, str(script),
         "--dataset", dataset,
         "--config", str(datasets_config_path),
     ]

@@ -41,6 +41,7 @@ dependencies = [
   "tsfeatures",
   "ray",
   "scipy~=1.11.3",
+  "torch>=2.6.0",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +65,8 @@ dev = [
     "ruff>=0.1.0",
     "ipykernel",
     "uv",
+    "statsforecast>=1.7.0" ,
+    "pyyaml"
 ]
 
 # All optional dependencies
@@ -109,3 +112,11 @@ line_length = 100
 line-length = 100
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

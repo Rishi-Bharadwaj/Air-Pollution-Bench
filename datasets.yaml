@@ -9,17 +9,21 @@ datasets:
 
   ######################## Sample datasets (from TIME docs) ########################
 
-  Water_Quality_Darwin/15T:
-    test_length: 1440    # 15 days
-    val_length: 1440
-    short:
-      prediction_length: 96    # 1 day
+  # Water_Quality_Darwin/15T:
+  #   test_length: 1440    # 15 days
+  #   val_length: 1440
+  #   short:
+  #     prediction_length: 96    # 1 day
 
   SG_PM25/H:
-    test_length: 720     # 30 days
-    val_length: 720
+    test_length: 2208  # 3 months, 92 days; 2025.03.01 - 2025.05.31
+    val_length: 2160  # 3 months, 90 days; 2025.01.01 - 2025.03.31
     short:
-      prediction_length: 24    # 1 day
+      prediction_length: 24    # 1 day; 2208/24 = 92 windows
+    medium:
+      prediction_length: 72    # 3 days; floor(2208/72) = 30 windows
+    long:
+      prediction_length: 168    # 7 days; floor(2208/168) = 13 windows
 
   ######################## Your datasets (add below) ########################
 
