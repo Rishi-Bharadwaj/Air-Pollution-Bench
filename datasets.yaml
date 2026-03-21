@@ -1,5 +1,6 @@
 # Dataset configuration for TIME benchmark runner
-# Format mirrors TIME's datasets.yaml — add your own datasets here
+# Only define 'short' — scripts auto-detect available terms,
+# so a single entry produces a single output per dataset.
 #
 # windows are auto-calculated: floor(test_length / prediction_length)
 # Keep test_length < 50% of your shortest series length
@@ -12,21 +13,13 @@ datasets:
     test_length: 1440    # 15 days
     val_length: 1440
     short:
-      prediction_length: 16    # 4 hours
-    medium:
       prediction_length: 96    # 1 day
-    long:
-      prediction_length: 288   # 3 days
 
   SG_PM25/H:
     test_length: 720     # 30 days
     val_length: 720
     short:
       prediction_length: 24    # 1 day
-    medium:
-      prediction_length: 168   # 1 week
-    long:
-      prediction_length: 720   # 30 days
 
   ######################## Your datasets (add below) ########################
 
@@ -35,7 +28,3 @@ datasets:
   #   val_length: 720
   #   short:
   #     prediction_length: 24
-  #   medium:
-  #     prediction_length: 168
-  #   long:
-  #     prediction_length: 720

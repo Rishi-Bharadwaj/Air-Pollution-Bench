@@ -79,6 +79,7 @@ def run_experiment(
 
     env = os.environ.copy()
     env["TIME_DATASET"] = str(data_dir)
+    env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::DeprecationWarning"
 
     print(f"\n{'='*60}")
     print(f"Model:         {model_name}")

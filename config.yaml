@@ -40,7 +40,7 @@ models:
     packages:
       - uni2ts
     args:
-      model_size: base
+      model_size: small   # only size currently released for moirai-2.0
       batch_size: 16
       context_length: 4000
 
@@ -49,6 +49,7 @@ models:
     packages:
       - timesfm
       - torch
+      - utilsforecast
     args:
       batch_size: 32
       context_length: 512
@@ -58,6 +59,7 @@ models:
     packages:
       - timesfm
       - torch
+      - utilsforecast
     args:
       batch_size: 32
       context_length: 512

@@ -63,6 +63,7 @@ dev = [
     "isort>=5.12",
     "ruff>=0.1.0",
     "ipykernel",
+    "uv",
 ]
 
 # All optional dependencies
