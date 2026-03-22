@@ -84,6 +84,14 @@ def run_timesfm_experiment(
     }
     model_id = model_map.get(model_size, "google/timesfm-2.5-200m-pytorch")
 
+    # Patch __init__ to filter out unexpected kwargs injected by HuggingFace from_pretrained
+    import inspect
+    _orig_init = timesfm.TimesFM_2p5_200M_torch.__init__
+    _valid_params = set(inspect.signature(_orig_init).parameters)
+    def _patched_init(self, *args, **kwargs):
+        _orig_init(self, *args, **{k: v for k, v in kwargs.items() if k in _valid_params})
+    timesfm.TimesFM_2p5_200M_torch.__init__ = _patched_init
+
     # Initialize TimesFM Model (Torch version)
     print(f"Initializing TimesFM-2.5 ({model_size})...")
     model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(

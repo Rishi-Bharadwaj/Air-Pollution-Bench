@@ -65,6 +65,14 @@ def run_experiment(
     script = time_repo / model_cfg["script"]
     packages = model_cfg.get("packages", [])
     extra_args = model_cfg.get("args", {})
+    git_clone = model_cfg.get("git_clone")
+
+    if git_clone:
+        clone_dest = time_repo / git_clone["dest"]
+        if not (clone_dest / ".git").exists():
+            print(f"Cloning {git_clone['url']} -> {clone_dest}")
+            clone_dest.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["git", "clone", git_clone["url"], str(clone_dest)], check=True)
 
     # Install model-specific packages into the project venv so that the
     # venv's torch (built for the local GPU) is reused rather than overridden
@@ -73,14 +81,11 @@ def run_experiment(
     python_bin = str(venv_python) if venv_python.exists() else "python"
 
     if packages:
-        # Install model packages, then force-reinstall torch from the cu128 index
-        # so that model packages (e.g. uni2ts) cannot pull in a PyPI torch that
-        # lacks sm_120 (Blackwell) support.
         install_cmd = ["uv", "pip", "install"] + packages
         print(f"Installing packages: {' '.join(packages)}")
         subprocess.run(install_cmd, cwd=time_repo, check=True)
         subprocess.run(
-            ["uv", "pip", "install", "torch>=2.6.0",
+            ["uv", "pip", "install", "torch>=2.10.0",
              "--index-url", "https://download.pytorch.org/whl/cu128"],
             cwd=time_repo, check=True,
         )

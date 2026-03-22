@@ -86,13 +86,14 @@ models:
     args:
       batch_size: 16
 
-  # toto:
-  #   script: experiments/toto_model.py
-  #   packages:
-  #     - toto-ts
-  #     - setuptools
-  #   args:
-  #     batch_size: 16
+  toto:
+    script: experiments/toto_model.py
+    packages:
+      - toto-ts
+      # - setuptools==81.0.0
+    args:
+      num_samples: 96
+      samples_per_batch: 16
 
   visionts:
     script: experiments/visiontspp.py
@@ -107,14 +108,28 @@ models:
     packages:
       - statsforecast
 
-  # kairos requires cloning the Kairos repo into experiments/Kairos/ first:
-  #   git clone <kairos_repo> TIME/TIME/experiments/Kairos
-  # kairos:
-  #   script: experiments/kairos_model.py
-  #   packages:
-  #     - python-dotenv
-  #     - pyarrow
+  kairos:
+    script: experiments/kairos_model.py
+    git_clone:
+      url: https://github.com/foundation-model-research/Kairos.git
+      dest: experiments/Kairos
+    packages:
+      - python-dotenv
+      - pyarrow
+    args:
+      batch_size: 16
 
+  ttm:
+    script: experiments/ttm.py
+    packages:
+      - granite-tsfm[notebooks]
+      - torch
+    args:
+      model_path: ibm-granite/granite-timeseries-ttm-r2
+      batch_size: 64
+      context_length: 512
+
+    
 # Default datasets to run when no dataset= override is given
 datasets:
   # - Water_Quality_Darwin/15T
