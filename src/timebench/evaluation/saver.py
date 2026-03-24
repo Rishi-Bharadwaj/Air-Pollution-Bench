@@ -222,6 +222,11 @@ def save_window_predictions(
     np.savez_compressed(metrics_path, **metrics)
     print(f"    Saved metrics to {metrics_path}")
 
+    # Collect item_ids from the dataset for per-series identification
+    item_ids = [entry["item_id"] for entry in dataset.gluonts_dataset]
+    assert len(item_ids) == num_series, \
+        f"item_ids count ({len(item_ids)}) != num_series ({num_series}). Dataset may have been shuffled or filtered."
+
     # Save config
     config = {
         "dataset_config": ds_config,
@@ -236,6 +241,7 @@ def save_window_predictions(
         "context_length": context_len,
         "metric_names": list(metrics.keys()),
         "prediction_scale_factor": prediction_scale_factor,  # For float16 overflow prevention
+        "item_ids": item_ids,
     }
 
     # Add model hyperparameters if provided

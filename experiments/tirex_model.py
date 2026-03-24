@@ -48,6 +48,7 @@ def run_tirex_experiment(
     model_id: str = "NX-AI/TiRex",
     output_dir: str | None = None,
     batch_size: int = 128,
+    context_length: int = 2048,
     config_path: Path | None = None,
     quantile_levels: list[float] | None = None,
 ):
@@ -141,6 +142,9 @@ def run_tirex_experiment(
             else:
                 series = target.squeeze()
 
+            if len(series) > context_length:
+                series = series[-context_length:]
+
             flat_contexts.append(series)
 
         total_items = len(flat_contexts)
@@ -175,6 +179,7 @@ def run_tirex_experiment(
         ds_config = f"{dataset_name}/{term}"
         model_hyperparams = {
             "model_id": model_id,
+            "context_length": context_length,
             "quantile_levels": quantile_levels,
         }
 
@@ -243,6 +248,9 @@ def main():
     )
 
     parser.add_argument(
+        "--context-length", type=int, default=2048, help="Maximum context length"
+    )
+    parser.add_argument(
         "--config", type=str, default=None, help="Path to datasets.yaml config file"
     )
     args = parser.parse_args()
@@ -275,6 +283,7 @@ def main():
                 model_id=model_id,
                 output_dir=args.output_dir,
                 batch_size=args.batch_size,
+                context_length=args.context_length,
                 config_path=config_path,
                 quantile_levels=args.quantiles,
             )

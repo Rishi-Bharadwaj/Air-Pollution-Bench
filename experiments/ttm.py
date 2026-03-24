@@ -289,7 +289,9 @@ def run_ttm_experiment(
         print(f"    - Windows: {dataset.windows}")
         print(f"    - Prediction length: {dataset.prediction_length}")
 
-        season_length = get_seasonality(dataset.freq)
+        freq_str = str(dataset.freq)
+        pd_freq = _FREQ_TO_PANDAS.get(freq_str, freq_str)
+        season_length = get_seasonality(pd_freq)
 
         # --- Step 1: Run inference on validation set (for conformal calibration) ---
         print("    Running inference on validation set (for conformal calibration)...")
@@ -302,7 +304,7 @@ def run_ttm_experiment(
                 context_length=context_length,
                 prediction_length=effective_pred_len,
                 batch_size=batch_size,
-                freq=dataset.freq,
+                freq=freq_str,
             )
             val_true = np.stack(val_targets)[:, :effective_pred_len]
 
@@ -330,7 +332,7 @@ def run_ttm_experiment(
             context_length=context_length,
             prediction_length=effective_pred_len,
             batch_size=batch_size,
-            freq=dataset.freq,
+            freq=freq_str,
         )
 
         # Handle shorter predictions

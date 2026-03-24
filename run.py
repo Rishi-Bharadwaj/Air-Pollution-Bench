@@ -84,11 +84,27 @@ def run_experiment(
         install_cmd = ["uv", "pip", "install"] + packages
         print(f"Installing packages: {' '.join(packages)}")
         subprocess.run(install_cmd, cwd=time_repo, check=True)
-        subprocess.run(
-            ["uv", "pip", "install", "torch>=2.10.0",
-             "--index-url", "https://download.pytorch.org/whl/cu128"],
-            cwd=time_repo, check=True,
+
+        # Only reinstall torch from CUDA index if it's missing or below the required version
+        torch_check = subprocess.run(
+            [python_bin, "-c", "import torch; print(torch.__version__)"],
+            capture_output=True, text=True,
         )
+        needs_torch = torch_check.returncode != 0
+        if not needs_torch:
+            from packaging.version import Version
+            installed = torch_check.stdout.strip().split("+")[0]  # strip +cu128 suffix
+            needs_torch = Version(installed) < Version("2.10.0")
+
+        if needs_torch:
+            print(f"Installing torch>=2.10.0 (current: {torch_check.stdout.strip() if torch_check.returncode == 0 else 'not found'})")
+            subprocess.run(
+                ["uv", "pip", "install", "torch>=2.10.0",
+                 "--index-url", "https://download.pytorch.org/whl/cu128"],
+                cwd=time_repo, check=True,
+            )
+        else:
+            print(f"torch {torch_check.stdout.strip()} already installed, skipping reinstall")
 
     cmd = [
         python_bin, str(script),

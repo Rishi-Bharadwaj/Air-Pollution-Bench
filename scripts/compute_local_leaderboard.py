@@ -1,110 +1,35 @@
 #!/usr/bin/env python3
 """
-Compute Overall Leaderboard from TIME evaluation results.
+Compute Overall Leaderboard from local TIME evaluation results.
 
 This script:
-1. Downloads Seasonal Naive results from HuggingFace Hub (if not found locally)
-2. Loads your model results from output/results/{model_name}
-3. Computes Overall leaderboard metrics (normalized by Seasonal Naive)
-4. Prints the results in a formatted table
+1. Loads all model results (including seasonal_naive) from output/results/
+2. Computes Overall leaderboard metrics (normalized by Seasonal Naive)
+3. Computes per-pollutant leaderboard (if item_ids available)
+4. Exports results to CSV
 
 Usage:
-    python scripts/compute_overall_leaderboard.py
-
-The script uses default values:
-    - Results directory: output/results
-    - Sorting metric: MASE
+    python scripts/compute_local_leaderboard.py
+    python scripts/compute_local_leaderboard.py --dataset CPCB/H --metric MASE
 
 Requirements:
-    - huggingface_hub
     - pandas
     - numpy
     - scipy
+    - pyyaml
 """
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import numpy as np
 from scipy import stats
-from huggingface_hub import snapshot_download
 
 # Add parent directory to path to import timebench utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# HuggingFace repository for Seasonal Naive results
-HF_OUTPUT_REPO_ID = "Real-TSF/TIME-Output"
 SEASONAL_NAIVE_MODEL = "seasonal_naive"
-
-
-def check_local_seasonal_naive(results_dir: Path) -> Optional[Path]:
-    """
-    Check if Seasonal Naive results exist locally.
-
-    Args:
-        results_dir: Path to results directory (e.g., output/results)
-
-    Returns:
-        Path to results directory if found, None otherwise
-    """
-    seasonal_naive_path = results_dir / SEASONAL_NAIVE_MODEL
-    if seasonal_naive_path.exists() and seasonal_naive_path.is_dir():
-        # Check if it contains at least one dataset result
-        has_results = False
-        for dataset_dir in seasonal_naive_path.iterdir():
-            if dataset_dir.is_dir():
-                # Check if it has freq subdirectories with horizon results
-                for freq_dir in dataset_dir.iterdir():
-                    if freq_dir.is_dir():
-                        for horizon in ["short", "medium", "long"]:
-                            config_path = freq_dir / horizon / "config.json"
-                            if config_path.exists():
-                                has_results = True
-                                break
-                        if has_results:
-                            break
-                if has_results:
-                    break
-
-        if has_results:
-            return results_dir
-    return None
-
-
-def download_seasonal_naive_results(cache_dir: Optional[str] = None) -> Path:
-    """
-    Download Seasonal Naive results from HuggingFace Hub.
-
-    Args:
-        cache_dir: Optional cache directory. If None, uses default HF cache.
-
-    Returns:
-        Path to the downloaded results directory (containing seasonal_naive subdirectory)
-    """
-    print(f"📥 Downloading Seasonal Naive results from HuggingFace Hub...")
-    print(f"   Repository: {HF_OUTPUT_REPO_ID}")
-
-    try:
-        local_dir = snapshot_download(
-            repo_id=HF_OUTPUT_REPO_ID,
-            repo_type="dataset",
-            allow_patterns=[f"results/{SEASONAL_NAIVE_MODEL}/**"],
-            cache_dir=cache_dir,
-        )
-
-        results_path = Path(local_dir) / "results"
-        seasonal_naive_path = results_path / SEASONAL_NAIVE_MODEL
-
-        if not seasonal_naive_path.exists():
-            raise FileNotFoundError(f"Seasonal Naive results not found at {seasonal_naive_path}")
-
-        print(f"✅ Seasonal Naive results cached at: {seasonal_naive_path}")
-        return results_path  # Return results directory, not just seasonal_naive
-    except Exception as e:
-        print(f"❌ Error downloading Seasonal Naive results: {e}")
-        raise
 
 
 def load_time_results(root_dir: Path, model_name: str, dataset_with_freq: str, horizon: str):
@@ -388,88 +313,176 @@ def get_overall_leaderboard(df_datasets: pd.DataFrame, metric: str = "MASE") -> 
     return leaderboard
 
 
+def extract_pollutant(item_id: str) -> str:
+    """Extract pollutant name from item_id (e.g., 'site_105_..._IMD_CO' -> 'CO')."""
+    return item_id.rsplit("_", 1)[-1]
+
+
+def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = None) -> pd.DataFrame:
+    """
+    Load per-series metrics from NPZ files, map to pollutant via item_ids in config.json,
+    and return per-pollutant aggregated metrics.
+
+    Returns:
+        DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "MSE"]
+    """
+    import json
+    rows = []
+
+    for model_dir in results_root.iterdir():
+        if not model_dir.is_dir():
+            continue
+        model_name = model_dir.name
+
+        for dataset_dir in model_dir.iterdir():
+            if not dataset_dir.is_dir():
+                continue
+            dataset_name = dataset_dir.name
+
+            for freq_dir in dataset_dir.iterdir():
+                if not freq_dir.is_dir():
+                    continue
+                freq_name = freq_dir.name
+                dataset_id = f"{dataset_name}/{freq_name}"
+
+                if dataset_filter and dataset_id not in dataset_filter:
+                    continue
+
+                for horizon in ["short", "medium", "long"]:
+                    horizon_dir = results_root / model_name / dataset_id / horizon
+                    metrics_path = horizon_dir / "metrics.npz"
+                    config_path = horizon_dir / "config.json"
+
+                    if not metrics_path.exists() or not config_path.exists():
+                        continue
+
+                    with open(config_path) as f:
+                        config = json.load(f)
+
+                    item_ids = config.get("item_ids")
+                    if not item_ids:
+                        continue
+
+                    npz_metrics = np.load(metrics_path)
+                    # metrics shape: (num_series, num_windows, num_variates)
+                    # Aggregate over windows and variates per series, then group by pollutant
+                    for series_idx, item_id in enumerate(item_ids):
+                        pollutant = extract_pollutant(item_id)
+                        row = {
+                            "model": model_name,
+                            "dataset_id": dataset_id,
+                            "horizon": horizon,
+                            "pollutant": pollutant,
+                        }
+                        for metric_name in ["MASE", "CRPS", "MAE", "MSE"]:
+                            arr = npz_metrics.get(metric_name)
+                            if arr is not None and series_idx < arr.shape[0]:
+                                row[metric_name] = np.nanmean(arr[series_idx])
+                            else:
+                                row[metric_name] = np.nan
+                        rows.append(row)
+
+    if not rows:
+        return pd.DataFrame(columns=["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "MSE"])
+
+    # Aggregate per (model, dataset_id, horizon, pollutant)
+    df = pd.DataFrame(rows)
+    return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[
+        ["MASE", "CRPS", "MAE", "MSE"]
+    ].mean()
+
+
+def filter_by_datasets(df: pd.DataFrame, dataset_ids: list[str]) -> pd.DataFrame:
+    """Filter results DataFrame to only include specified dataset_ids."""
+    if not dataset_ids:
+        raise ValueError("No dataset_ids provided")
+    filtered = df[df["dataset_id"].isin(dataset_ids)]
+    if filtered.empty:
+        raise ValueError(f"Datasets {dataset_ids} not found in results")
+    return filtered.copy()
+
+
 def main():
-    # Fixed configuration
-    results_dir = "output/results"
-    metric = "MASE"
-    cache_dir = None
+    import argparse
+    import yaml
+
+    parser = argparse.ArgumentParser(description="Compute leaderboard from TIME evaluation results")
+    parser.add_argument("--results-dir", type=str, default=None,
+                        help="Path to results directory (default: output/results)")
+    parser.add_argument("--dataset", type=str, nargs="+", default=None,
+                        help="Dataset(s) to include, e.g. CPCB/H (default: all)")
+    parser.add_argument("--metric", type=str, default=None, choices=["MASE", "CRPS"],
+                        help="Metric to sort by (default: MASE)")
+    parser.add_argument("--output-dir", type=str, default=None,
+                        help="Directory to save CSV exports (default: output/leaderboard)")
+    parser.add_argument("--config", type=str, default="config.yaml",
+                        help="Path to config.yaml (used for defaults if CLI args not given)")
+    args = parser.parse_args()
+
+    # Load defaults from config.yaml leaderboard section
+    config_lb = {}
+    config_path = Path(args.config)
+    if config_path.exists():
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+        config_lb = config.get("leaderboard", {}) or {}
+
+    results_dir = args.results_dir or config_lb.get("results_dir", "output/results")
+    dataset_filter = args.dataset or config_lb.get("datasets", None)
+    metric = args.metric or config_lb.get("metric", "MASE")
+    output_dir = Path(args.output_dir or config_lb.get("output_dir", "output/leaderboard"))
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)
-    print("TIME Overall Leaderboard Calculator")
+    print("TIME Local Leaderboard Calculator")
     print("=" * 80)
+    if dataset_filter:
+        print(f"  Filtering to datasets: {dataset_filter}")
     print()
 
-    # Step 1: Check for local Seasonal Naive results or download
+    # Step 1: Load all results (including seasonal_naive) from results directory
     results_root = Path(results_dir)
-    print("Step 1: Checking for Seasonal Naive results...")
-
-    # First check if seasonal_naive exists locally in the results directory
-    local_seasonal_naive = check_local_seasonal_naive(results_root)
-
-    if local_seasonal_naive:
-        print(f"✅ Found local Seasonal Naive results at {results_root / SEASONAL_NAIVE_MODEL}")
-        seasonal_naive_results_path = results_root
-    else:
-        print(f"   Local Seasonal Naive results not found at {results_root / SEASONAL_NAIVE_MODEL}")
-        print("   Downloading from HuggingFace Hub...")
-        try:
-            downloaded_results_path = download_seasonal_naive_results(cache_dir=cache_dir)
-            seasonal_naive_results_path = downloaded_results_path
-        except Exception as e:
-            print(f"❌ Failed to download Seasonal Naive results: {e}")
-            sys.exit(1)
-
-    # Step 2: Load user results
-    print(f"\nStep 2: Loading results from {results_root}...")
+    print(f"Step 1: Loading results from {results_root}...")
 
     if not results_root.exists():
         print(f"❌ Error: Results directory does not exist: {results_root}")
         sys.exit(1)
 
-    # Load user results
-    user_results = get_all_datasets_results(results_root)
+    all_results = get_all_datasets_results(results_root)
 
-    if user_results.empty:
+    if all_results.empty:
         print(f"❌ No results found in {results_root}")
         sys.exit(1)
 
-    print(f"✅ Loaded {len(user_results)} user results")
+    print(f"✅ Loaded {len(all_results)} results")
 
-    # Step 3: Load Seasonal Naive results
-    print(f"\nStep 3: Loading Seasonal Naive results...")
-    seasonal_naive_results = get_all_datasets_results(seasonal_naive_results_path)
+    # Filter to requested datasets
+    if dataset_filter:
+        all_results = filter_by_datasets(all_results, dataset_filter)
+        print(f"   After filtering: {len(all_results)} results for {dataset_filter}")
 
-    # Filter to only seasonal_naive model
-    seasonal_naive_results = seasonal_naive_results[
-        seasonal_naive_results["model"] == SEASONAL_NAIVE_MODEL
-    ]
-
-    if seasonal_naive_results.empty:
-        print(f"❌ No Seasonal Naive results found")
+    # Check that seasonal_naive is present
+    if SEASONAL_NAIVE_MODEL not in all_results["model"].values:
+        print(f"❌ No '{SEASONAL_NAIVE_MODEL}' results found in {results_root}.")
+        print(f"   Run seasonal_naive first, or place its results in {results_root / SEASONAL_NAIVE_MODEL}/")
         sys.exit(1)
 
-    print(f"✅ Loaded {len(seasonal_naive_results)} Seasonal Naive results")
-
-    # Step 4: Merge results
-    print(f"\nStep 4: Merging results...")
-    all_results = pd.concat([user_results, seasonal_naive_results], ignore_index=True)
-
-    # Compute ranks
+    # Step 2: Compute ranks
+    print(f"\nStep 2: Computing ranks...")
     all_results = compute_ranks(all_results, groupby_cols=["dataset_id", "horizon"])
 
-    print(f"✅ Total configurations: {len(all_results)}")
     print(f"   Models: {sorted(all_results['model'].unique())}")
-    print(f"   Datasets: {len(all_results['dataset_id'].unique())}")
+    print(f"   Datasets: {sorted(all_results['dataset_id'].unique())}")
 
-    # Step 5: Compute Overall Leaderboard
-    print(f"\nStep 5: Computing Overall Leaderboard...")
+    # Step 3: Compute Overall Leaderboard
+    print(f"\nStep 3: Computing Overall Leaderboard...")
     leaderboard = get_overall_leaderboard(all_results, metric=metric)
 
     if leaderboard.empty:
         print("❌ Failed to compute leaderboard")
         sys.exit(1)
 
-    # Step 6: Display results
+    # Display results
     print("\n" + "=" * 80)
     print("Overall Leaderboard")
     print("=" * 80)
@@ -481,6 +494,68 @@ def main():
     print("Note: Metrics are normalized by Seasonal Naive baseline.")
     print("      Lower values are better. Seasonal Naive = 1.0")
     print("=" * 80)
+
+    # Export overall leaderboard to CSV
+    overall_csv = output_dir / "overall_leaderboard.csv"
+    leaderboard.to_csv(overall_csv, index=False)
+    print(f"\n   Saved overall leaderboard to {overall_csv}")
+
+    # Export per-dataset raw results to CSV
+    raw_csv = output_dir / "per_dataset_results.csv"
+    all_results.round(4).to_csv(raw_csv, index=False)
+    print(f"   Saved per-dataset results to {raw_csv}")
+
+    # Step 4: Per-pollutant leaderboard
+    print(f"\nStep 4: Computing per-pollutant leaderboard...")
+    pollutant_results = get_per_pollutant_results(results_root, dataset_filter)
+
+    if pollutant_results.empty:
+        print("   No per-pollutant data available (item_ids missing from config.json?)")
+    else:
+        pollutants = sorted(pollutant_results["pollutant"].unique())
+        print(f"   Found pollutants: {pollutants}")
+
+        # Build aggregated per-pollutant table for display and CSV export
+        pollutant_agg_rows = []
+        datasets_in_results = sorted(pollutant_results["dataset_id"].unique())
+        for dataset_id in datasets_in_results:
+            ddf = pollutant_results[pollutant_results["dataset_id"] == dataset_id]
+            dataset_pollutants = sorted(ddf["pollutant"].unique())
+
+            print(f"\n{'=' * 60}")
+            print(f"  Dataset: {dataset_id}")
+            print(f"{'=' * 60}")
+
+            for pollutant in dataset_pollutants:
+                pdf = ddf[ddf["pollutant"] == pollutant]
+                agg = pdf.groupby("model")[["MASE", "CRPS", "MAE", "MSE"]].mean().reset_index()
+                agg = agg.sort_values(by=metric, ascending=True).reset_index(drop=True)
+                agg = agg.round(4)
+
+                print(f"\n  {'─' * 40}")
+                print(f"    Pollutant: {pollutant}")
+                print(f"  {'─' * 40}")
+                print(agg.to_string(index=False))
+
+                # Collect for CSV
+                agg_csv = agg.copy()
+                agg_csv.insert(0, "dataset_id", dataset_id)
+                agg_csv.insert(1, "pollutant", pollutant)
+                pollutant_agg_rows.append(agg_csv)
+
+        print()
+
+        # Export per-pollutant results to CSV
+        if pollutant_agg_rows:
+            pollutant_csv_df = pd.concat(pollutant_agg_rows, ignore_index=True)
+            pollutant_csv = output_dir / "per_pollutant_leaderboard.csv"
+            pollutant_csv_df.to_csv(pollutant_csv, index=False)
+            print(f"   Saved per-pollutant leaderboard to {pollutant_csv}")
+
+            # Also export the raw per-series pollutant results
+            raw_pollutant_csv = output_dir / "per_pollutant_results.csv"
+            pollutant_results.round(4).to_csv(raw_pollutant_csv, index=False)
+            print(f"   Saved raw per-pollutant results to {raw_pollutant_csv}")
 
 
 if __name__ == "__main__":

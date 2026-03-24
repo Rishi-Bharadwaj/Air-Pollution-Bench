@@ -1,0 +1,18 @@
+# =============================================================================
+# AQ Dataset Configuration
+# =============================================================================
+# sources: input/output paths for aq_dataset_builder.py
+# datasets: evaluation config for experiment scripts
+# =============================================================================
+
+sources:
+  CPCB/H:
+    csv_dir: /mnt/2TB_WD/rishi/cpcb/sites_imputed
+    output_path: data/hf_dataset/CPCB/H
+
+datasets:
+  CPCB/H:
+    test_length: 1440   # 2 years (365*2*24)
+    val_length: 0
+    short:
+      prediction_length: 168  # 1 week
