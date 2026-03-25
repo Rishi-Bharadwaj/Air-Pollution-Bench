@@ -12,8 +12,6 @@ models:
       - chronos-forecasting
       - torch
     args:
-      model_size: base
-      batch_size: 64
       context_length: 168
 
   chronos2:
@@ -21,8 +19,6 @@ models:
     packages:
       - chronos-forecasting
     args:
-      model_size: base
-      batch_size: 16
       context_length: 168
 
   moirai:
@@ -30,8 +26,6 @@ models:
     packages:
       - uni2ts
     args:
-      model_size: base
-      batch_size: 16
       context_length: 168
 
   moirai2:
@@ -40,7 +34,6 @@ models:
       - uni2ts
     args:
       model_size: small   # only size currently released for moirai-2.0
-      batch_size: 16
       context_length: 168
 
   timesfm1:
@@ -49,7 +42,6 @@ models:
       - timesfm[torch]<1.3.0
       - utilsforecast
     args:
-      batch_size: 32
       context_length: 168
 
   timesfm2:
@@ -58,7 +50,6 @@ models:
       - timesfm[torch]<1.3.0
       - utilsforecast
     args:
-      batch_size: 32
       context_length: 168
 
   timesfm25:
@@ -66,7 +57,6 @@ models:
     packages:
       - git+https://github.com/google-research/timesfm.git
     args:
-      batch_size: 32
       context_length: 168
 
   sundial:
@@ -74,7 +64,6 @@ models:
     packages:
       - transformers==4.40.1
     args:
-      batch_size: 16
       context_length: 168
 
   tirex:
@@ -82,7 +71,6 @@ models:
     packages:
       - tirex-ts
     args:
-      batch_size: 16
       context_length: 168
 
   toto:
@@ -91,8 +79,6 @@ models:
       - toto-ts
       # - setuptools==81.0.0
     args:
-      num_samples: 96
-      samples_per_batch: 16
       context_length: 168
 
   visionts:
@@ -100,13 +86,14 @@ models:
     packages:
       - visionts
     args:
-      batch_size: 16
       context_length : 168
 
   seasonal_naive:
     script: experiments/seasonal_naive.py
     packages:
       - statsforecast
+    args:
+    context_length: 168
 
   kairos:
     script: experiments/kairos_model.py
@@ -117,7 +104,6 @@ models:
       - python-dotenv
       - pyarrow
     args:
-      batch_size: 16
       context_length: 168
 
   # ttm:
@@ -134,14 +120,14 @@ models:
 # Default datasets to run when no dataset= override is given
 datasets:
   # - Water_Quality_Darwin/15T
-  # - CPCB/H
-  - SG_PM25/H
+  - CPCB/H
+  # - SG_PM25/H
 
 # Leaderboard settings
 leaderboard:
   results_dir: output/results
   datasets:             # leave empty or omit to use all datasets in results_dir
-    # - CPCB/H
-    - SG_PM25/H
+    - CPCB/H
+    # - SG_PM25/H
   metric: MASE          # sort by this metric
-  air_pollution: false   # per-pollutant leaderboard instead of original overall leaderboard
+  air_pollution: true   # per-pollutant leaderboard instead of original overall leaderboard

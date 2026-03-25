@@ -12,10 +12,10 @@ sources:
 
 datasets:
   CPCB/H:
-    test_length: 1440   # 2 months, 
+    test_length: 26136   # 3 years - 168
     val_length: 0
     short:
-      prediction_length: 168  # 1 week
+      prediction_length: 24  # 1 week
 
 
   SG_PM25/H:
