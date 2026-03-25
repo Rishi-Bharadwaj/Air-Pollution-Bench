@@ -392,14 +392,76 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     ].mean()
 
 
+def get_pollutant_balanced_leaderboard(
+    pollutant_results: pd.DataFrame, metric: str = "MASE"
+) -> pd.DataFrame:
+    """
+    Compute a pollutant-balanced overall leaderboard.
+
+    1. Mean MASE/CRPS per (model, dataset, horizon, pollutant) — across sites
+    2. Mean of those per (model, dataset, horizon) — balanced per-dataset score
+    3. Normalize by Seasonal Naive's balanced score per (dataset, horizon)
+    4. Geometric mean across (dataset, horizon) configs
+
+    Returns leaderboard DataFrame similar to get_overall_leaderboard.
+    """
+    if pollutant_results.empty:
+        return pd.DataFrame()
+
+    # Step 1: mean per (model, dataset, horizon, pollutant)
+    per_pol = pollutant_results.groupby(
+        ["model", "dataset_id", "horizon", "pollutant"], as_index=False
+    )[["MASE", "CRPS"]].mean()
+
+    # Step 2: mean across pollutants per (model, dataset, horizon)
+    balanced = per_pol.groupby(
+        ["model", "dataset_id", "horizon"], as_index=False
+    )[["MASE", "CRPS"]].mean()
+
+    # Step 3: normalize by seasonal naive
+    balanced_norm = normalize_by_seasonal_naive(
+        balanced,
+        baseline_model=SEASONAL_NAIVE_MODEL,
+        metrics=["MASE", "CRPS"],
+        groupby_cols=["dataset_id", "horizon"],
+    )
+
+    if balanced_norm.empty:
+        return pd.DataFrame()
+
+    # Step 4: geometric mean across (dataset, horizon) configs
+    def gmean_with_nan(x):
+        valid = x.dropna()
+        if len(valid) == 0:
+            return np.nan
+        return stats.gmean(valid)
+
+    leaderboard = (
+        balanced_norm.groupby("model")[["MASE", "CRPS"]]
+        .agg(gmean_with_nan)
+        .reset_index()
+    )
+    leaderboard = leaderboard.rename(columns={
+        "MASE": "MASE (norm.)",
+        "CRPS": "CRPS (norm.)",
+    })
+
+    sort_col = "MASE (norm.)" if metric == "MASE" else "CRPS (norm.)"
+    if sort_col in leaderboard.columns:
+        leaderboard = leaderboard.sort_values(by=sort_col, ascending=True).reset_index(drop=True)
+
+    leaderboard = leaderboard.round(3)
+    return leaderboard
+
+
 def filter_by_datasets(df: pd.DataFrame, dataset_ids: list[str]) -> pd.DataFrame:
     """Filter results DataFrame to only include specified dataset_ids."""
     if not dataset_ids:
         raise ValueError("No dataset_ids provided")
-    filtered = df[df["dataset_id"].isin(dataset_ids)]
-    if filtered.empty:
-        raise ValueError(f"Datasets {dataset_ids} not found in results")
-    return filtered.copy()
+    missing = set(dataset_ids) - set(df["dataset_id"].unique())
+    if missing:
+        raise ValueError(f"Datasets not found in results: {missing}")
+    return df[df["dataset_id"].isin(dataset_ids)].copy()
 
 
 def main():
@@ -432,6 +494,7 @@ def main():
     metric = args.metric or config_lb.get("metric", "MASE")
     output_dir = Path(args.output_dir or config_lb.get("output_dir", "output/leaderboard"))
     output_dir.mkdir(parents=True, exist_ok=True)
+    air_pollution = config_lb.get("air_pollution", False)
 
     print("=" * 80)
     print("TIME Local Leaderboard Calculator")
@@ -474,48 +537,24 @@ def main():
     print(f"   Models: {sorted(all_results['model'].unique())}")
     print(f"   Datasets: {sorted(all_results['dataset_id'].unique())}")
 
-    # Step 3: Compute Overall Leaderboard
-    print(f"\nStep 3: Computing Overall Leaderboard...")
-    leaderboard = get_overall_leaderboard(all_results, metric=metric)
-
-    if leaderboard.empty:
-        print("❌ Failed to compute leaderboard")
-        sys.exit(1)
-
-    # Display results
-    print("\n" + "=" * 80)
-    print("Overall Leaderboard")
-    print("=" * 80)
-    print()
-    print(leaderboard.to_string(index=False))
-    print()
-
-    print("\n" + "=" * 80)
-    print("Note: Metrics are normalized by Seasonal Naive baseline.")
-    print("      Lower values are better. Seasonal Naive = 1.0")
-    print("=" * 80)
-
-    # Export overall leaderboard to CSV
-    overall_csv = output_dir / "overall_leaderboard.csv"
-    leaderboard.to_csv(overall_csv, index=False)
-    print(f"\n   Saved overall leaderboard to {overall_csv}")
-
     # Export per-dataset raw results to CSV
     raw_csv = output_dir / "per_dataset_results.csv"
     all_results.round(4).to_csv(raw_csv, index=False)
     print(f"   Saved per-dataset results to {raw_csv}")
 
-    # Step 4: Per-pollutant leaderboard
-    print(f"\nStep 4: Computing per-pollutant leaderboard...")
-    pollutant_results = get_per_pollutant_results(results_root, dataset_filter)
+    if air_pollution:
+        # --- Air pollution mode: per-pollutant + pollutant-balanced leaderboard ---
+        print(f"\nStep 3: Computing per-pollutant leaderboard...")
+        pollutant_results = get_per_pollutant_results(results_root, dataset_filter)
 
-    if pollutant_results.empty:
-        print("   No per-pollutant data available (item_ids missing from config.json?)")
-    else:
+        if pollutant_results.empty:
+            print("   No per-pollutant data available (item_ids missing from config.json?)")
+            sys.exit(1)
+
         pollutants = sorted(pollutant_results["pollutant"].unique())
         print(f"   Found pollutants: {pollutants}")
 
-        # Build aggregated per-pollutant table for display and CSV export
+        # Build per-pollutant tables: mean across sites per pollutant
         pollutant_agg_rows = []
         datasets_in_results = sorted(pollutant_results["dataset_id"].unique())
         for dataset_id in datasets_in_results:
@@ -545,6 +584,21 @@ def main():
 
         print()
 
+        # Pollutant-balanced overall leaderboard
+        balanced_lb = get_pollutant_balanced_leaderboard(pollutant_results, metric=metric)
+        if not balanced_lb.empty:
+            print(f"\n{'=' * 60}")
+            print("  Pollutant-Balanced Overall Leaderboard")
+            print("  (mean across sites per pollutant, mean across pollutants per dataset,")
+            print("   normalized by Seasonal Naive, gmean across datasets)")
+            print(f"{'=' * 60}")
+            print(balanced_lb.to_string(index=False))
+            print()
+
+            balanced_csv = output_dir / "pollutant_balanced_leaderboard.csv"
+            balanced_lb.to_csv(balanced_csv, index=False)
+            print(f"   Saved pollutant-balanced leaderboard to {balanced_csv}")
+
         # Export per-pollutant results to CSV
         if pollutant_agg_rows:
             pollutant_csv_df = pd.concat(pollutant_agg_rows, ignore_index=True)
@@ -552,10 +606,34 @@ def main():
             pollutant_csv_df.to_csv(pollutant_csv, index=False)
             print(f"   Saved per-pollutant leaderboard to {pollutant_csv}")
 
-            # Also export the raw per-series pollutant results
             raw_pollutant_csv = output_dir / "per_pollutant_results.csv"
             pollutant_results.round(4).to_csv(raw_pollutant_csv, index=False)
             print(f"   Saved raw per-pollutant results to {raw_pollutant_csv}")
+
+    else:
+        # --- Original mode: overall leaderboard ---
+        print(f"\nStep 3: Computing Overall Leaderboard...")
+        leaderboard = get_overall_leaderboard(all_results, metric=metric)
+
+        if leaderboard.empty:
+            print("Failed to compute leaderboard")
+            sys.exit(1)
+
+        print("\n" + "=" * 80)
+        print("Overall Leaderboard")
+        print("=" * 80)
+        print()
+        print(leaderboard.to_string(index=False))
+        print()
+
+        print("\n" + "=" * 80)
+        print("Note: Metrics are normalized by Seasonal Naive baseline.")
+        print("      Lower values are better. Seasonal Naive = 1.0")
+        print("=" * 80)
+
+        overall_csv = output_dir / "overall_leaderboard.csv"
+        leaderboard.to_csv(overall_csv, index=False)
+        print(f"\n   Saved overall leaderboard to {overall_csv}")
 
 
 if __name__ == "__main__":

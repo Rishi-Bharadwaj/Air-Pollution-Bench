@@ -137,12 +137,13 @@ def run_timesfm_experiment(
         effective_output_patch_len = model_cfg["output_patch_len"]
 
         print(f"  Initializing TimesFM-1.0 ({model_size})...")
+        hparams_context_len = ((context_length + input_patch_len - 1) // input_patch_len) * input_patch_len
         tfm = timesfm.TimesFm(
             hparams=timesfm.TimesFmHparams(
                 backend=backend,
                 per_core_batch_size=per_core_batch_size,
                 horizon_len=prediction_length,
-                context_len=context_length,
+                context_len=hparams_context_len,
                 input_patch_len=input_patch_len,
                 output_patch_len=effective_output_patch_len,
                 num_layers=model_cfg["num_layers"],

@@ -12,7 +12,18 @@ sources:
 
 datasets:
   CPCB/H:
-    test_length: 1440   # 2 years (365*2*24)
+    test_length: 1440   # 2 months, 
     val_length: 0
     short:
       prediction_length: 168  # 1 week
+
+
+  SG_PM25/H:
+    test_length: 2208  # 3 months, 92 days; 2025.03.01 - 2025.05.31
+    val_length: 2160  # 3 months, 90 days; 2025.01.01 - 2025.03.31
+    short:
+      prediction_length: 24    # 1 day; 2208/24 = 92 windows
+    medium:
+      prediction_length: 72    # 3 days; floor(2208/72) = 30 windows
+    long:
+      prediction_length: 168    # 7 days; floor(2208/168) = 13 windows

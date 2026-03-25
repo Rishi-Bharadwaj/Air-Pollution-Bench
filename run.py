@@ -94,12 +94,12 @@ def run_experiment(
         if not needs_torch:
             from packaging.version import Version
             installed = torch_check.stdout.strip().split("+")[0]  # strip +cu128 suffix
-            needs_torch = Version(installed) < Version("2.10.0")
+            needs_torch = Version(installed) != Version("2.10.0")
 
         if needs_torch:
-            print(f"Installing torch>=2.10.0 (current: {torch_check.stdout.strip() if torch_check.returncode == 0 else 'not found'})")
+            print(f"Installing torch==2.10.0 (current: {torch_check.stdout.strip() if torch_check.returncode == 0 else 'not found'})")
             subprocess.run(
-                ["uv", "pip", "install", "torch>=2.10.0",
+                ["uv", "pip", "install", "torch==2.10.0",
                  "--index-url", "https://download.pytorch.org/whl/cu128"],
                 cwd=time_repo, check=True,
             )

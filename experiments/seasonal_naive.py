@@ -43,6 +43,7 @@ def run_seasonal_naive_experiment(
     terms: list[str] = None,
     output_dir: str | None = None,
     num_samples: int = 100,
+    context_length: int | None = None,
     config_path: Path | None = None,
 ):
     """
@@ -126,7 +127,15 @@ def run_seasonal_naive_experiment(
         print(f"    - Season length: {season_length}")
 
         # Generate predictions
-        forecasts = list(predictor.predict(eval_data.input))
+        inputs = eval_data.input
+        if context_length is not None:
+            inputs = []
+            for d in inputs:
+                new_d = d.copy()
+                new_d["target"] = d["target"][-context_length:]
+                inputs.append(new_d)
+
+        forecasts = list(predictor.predict(inputs))
 
         fc_samples = []
         for fc in forecasts:
@@ -178,6 +187,8 @@ def main():
                         help="Output directory for results")
     parser.add_argument("--num-samples", type=int, default=100,
                         help="Number of samples for probabilistic forecasting (all identical for Seasonal Naive)")
+    parser.add_argument("--context-length", type=int, default=None,
+                        help="Maximum context length; crops to last N timesteps if series is longer")
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
     args = parser.parse_args()
@@ -208,6 +219,7 @@ def main():
                 terms=args.terms,
                 output_dir=args.output_dir,
                 num_samples=args.num_samples,
+                context_length=args.context_length,
                 config_path=config_path,
             )
         except Exception as e:

@@ -14,17 +14,16 @@ models:
     args:
       model_size: base
       batch_size: 64
-      context_length: 2048
+      context_length: 168
 
   chronos2:
     script: experiments/chronos2.py
     packages:
       - chronos-forecasting
-      - torch
     args:
       model_size: base
       batch_size: 16
-      context_length: 8192
+      context_length: 168
 
   moirai:
     script: experiments/moirai.py
@@ -33,7 +32,7 @@ models:
     args:
       model_size: base
       batch_size: 16
-      context_length: 4000
+      context_length: 168
 
   moirai2:
     script: experiments/moirai2.py
@@ -42,7 +41,7 @@ models:
     args:
       model_size: small   # only size currently released for moirai-2.0
       batch_size: 16
-      context_length: 4000
+      context_length: 168
 
   timesfm1:
     script: experiments/timesfm1.0.py
@@ -51,7 +50,7 @@ models:
       - utilsforecast
     args:
       batch_size: 32
-      context_length: 512
+      context_length: 168
 
   timesfm2:
     script: experiments/timesfm2.0.py
@@ -60,25 +59,23 @@ models:
       - utilsforecast
     args:
       batch_size: 32
-      context_length: 2048
+      context_length: 168
 
   timesfm25:
     script: experiments/timesfm2.5.py
     packages:
       - git+https://github.com/google-research/timesfm.git
-      - torch
     args:
       batch_size: 32
-      context_length: 4096
+      context_length: 168
 
   sundial:
     script: experiments/sundial.py
     packages:
       - transformers==4.40.1
-      - torch
     args:
       batch_size: 16
-      context_length: 2880
+      context_length: 168
 
   tirex:
     script: experiments/tirex_model.py
@@ -86,7 +83,7 @@ models:
       - tirex-ts
     args:
       batch_size: 16
-      context_length: 2048
+      context_length: 168
 
   toto:
     script: experiments/toto_model.py
@@ -96,16 +93,15 @@ models:
     args:
       num_samples: 96
       samples_per_batch: 16
-      context_length: 4000
+      context_length: 168
 
   visionts:
     script: experiments/visiontspp.py
     packages:
       - visionts
-      - torch
     args:
       batch_size: 16
-      context_length : 4000
+      context_length : 168
 
   seasonal_naive:
     script: experiments/seasonal_naive.py
@@ -122,7 +118,7 @@ models:
       - pyarrow
     args:
       batch_size: 16
-      context_length: 2048
+      context_length: 168
 
   # ttm:
   #   script: experiments/ttm.py
@@ -138,11 +134,14 @@ models:
 # Default datasets to run when no dataset= override is given
 datasets:
   # - Water_Quality_Darwin/15T
-  - CPCB/H
+  # - CPCB/H
+  - SG_PM25/H
 
 # Leaderboard settings
 leaderboard:
   results_dir: output/results
   datasets:             # leave empty or omit to use all datasets in results_dir
-    - CPCB/H
+    # - CPCB/H
+    - SG_PM25/H
   metric: MASE          # sort by this metric
+  air_pollution: false   # per-pollutant leaderboard instead of original overall leaderboard
