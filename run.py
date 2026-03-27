@@ -14,7 +14,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-
+from packaging.version import Version
 import yaml
 
 
@@ -74,8 +74,6 @@ def run_experiment(
             clone_dest.parent.mkdir(parents=True, exist_ok=True)
             subprocess.run(["git", "clone", git_clone["url"], str(clone_dest)], check=True)
 
-    # Install model-specific packages into the project venv so that the
-    # venv's torch (built for the local GPU) is reused rather than overridden
     # by uv's ephemeral --with environments.
     venv_python = time_repo / ".venv" / "bin" / "python"
     python_bin = str(venv_python) if venv_python.exists() else "python"
@@ -92,7 +90,7 @@ def run_experiment(
         )
         needs_torch = torch_check.returncode != 0
         if not needs_torch:
-            from packaging.version import Version
+            
             installed = torch_check.stdout.strip().split("+")[0]  # strip +cu128 suffix
             needs_torch = Version(installed) != Version("2.10.0")
 

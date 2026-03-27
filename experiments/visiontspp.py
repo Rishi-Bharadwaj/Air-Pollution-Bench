@@ -427,6 +427,7 @@ def main():
         datasets = args.dataset
 
     total_datasets = len(datasets)
+    failed = False
     for idx, dataset_name in enumerate(datasets, 1):
         print(f"\n{'#'*60}")
         print(f"# Dataset {idx}/{total_datasets}: {dataset_name}")
@@ -446,10 +447,13 @@ def main():
         except Exception as e:
             print(f"ERROR: Failed to run experiment for {dataset_name}: {e}")
             traceback.print_exc()
+            failed = True
             continue
 
     print(f"\n{'#'*60}")
     print(f"# All completed!")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
