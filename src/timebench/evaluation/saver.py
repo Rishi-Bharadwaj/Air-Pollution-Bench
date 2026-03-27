@@ -13,6 +13,8 @@ import json
 import os
 
 import numpy as np
+import pandas as pd
+from pandas.tseries.frequencies import to_offset
 
 from timebench.evaluation.metrics import (
     compute_per_window_metrics_from_quantiles,
@@ -183,6 +185,20 @@ def save_window_predictions(
             ctx_len_actual = ctx.shape[-1]
             context_array[series_idx, window_idx, :, :ctx_len_actual] = ctx
 
+    # Compute forecast timestamps: shape (num_series, num_windows, prediction_length), Unix seconds
+    freq_offset = to_offset(dataset.freq)
+    timestamps = np.empty((num_series, num_windows, prediction_length), dtype='int64')
+    for s_idx in range(num_series):
+        item = dataset.hf_dataset[s_idx]
+        series_start = pd.Timestamp(item['start'].item())
+        series_length = int(dataset._series_lengths[s_idx])
+        test_start_pos = series_length - dataset._test_length
+        for w_idx in range(num_windows):
+            window_start_pos = test_start_pos + w_idx * prediction_length
+            window_start_ts = series_start + window_start_pos * freq_offset
+            ts_range = pd.date_range(window_start_ts, periods=prediction_length, freq=freq_offset)
+            timestamps[s_idx, w_idx] = ts_range.astype('int64') // 10**9
+
     # Save quantiles to npz file
     # Use float16 to reduce storage (sufficient for visualization purposes)
     # Apply dynamic scaling to prevent float16 overflow (max ~65504)
@@ -204,6 +220,7 @@ def save_window_predictions(
         npz_path,
         predictions_quantiles=predictions_quantiles_scaled.astype(np.float16),
         quantile_levels=quantile_levels_array.astype(np.float16),
+        timestamps=timestamps,
     )
     print(f"    Saved predictions (quantiles) to {npz_path}")
 

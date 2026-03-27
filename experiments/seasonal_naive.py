@@ -127,10 +127,10 @@ def run_seasonal_naive_experiment(
         print(f"    - Season length: {season_length}")
 
         # Generate predictions
-        inputs = eval_data.input
+        orig_inputs = eval_data.input
         if context_length is not None:
             inputs = []
-            for d in inputs:
+            for d in orig_inputs:
                 new_d = d.copy()
                 new_d["target"] = d["target"][-context_length:]
                 inputs.append(new_d)

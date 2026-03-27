@@ -10,7 +10,6 @@ models:
     script: experiments/chronos_bolt.py
     packages:
       - chronos-forecasting
-      - torch
     args:
       context_length: 168
 
@@ -86,14 +85,14 @@ models:
     packages:
       - visionts
     args:
-      context_length : 168
+      context_length: 168
 
   seasonal_naive:
     script: experiments/seasonal_naive.py
     packages:
       - statsforecast
     args:
-    context_length: 168
+      context_length: 168
 
   kairos:
     script: experiments/kairos_model.py
@@ -120,14 +119,14 @@ models:
 # Default datasets to run when no dataset= override is given
 datasets:
   # - Water_Quality_Darwin/15T
-  - CPCB/H
-  # - SG_PM25/H
+  # - CPCB/H
+  - SG_PM25/H
 
 # Leaderboard settings
 leaderboard:
   results_dir: output/results
   datasets:             # leave empty or omit to use all datasets in results_dir
-    - CPCB/H
-    # - SG_PM25/H
+    # - CPCB/H
+    - SG_PM25/H
   metric: MASE          # sort by this metric
   air_pollution: true   # per-pollutant leaderboard instead of original overall leaderboard
