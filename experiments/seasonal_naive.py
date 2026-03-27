@@ -134,7 +134,8 @@ def run_seasonal_naive_experiment(
                 new_d = d.copy()
                 new_d["target"] = d["target"][-context_length:]
                 inputs.append(new_d)
-
+        else:
+            inputs=orig_inputs
         forecasts = list(predictor.predict(inputs))
 
         fc_samples = []
