@@ -138,19 +138,24 @@ def run_timesfm_experiment(
 
         print(f"  Initializing TimesFM-1.0 ({model_size})...")
         hparams_context_len = ((context_length + input_patch_len - 1) // input_patch_len) * input_patch_len
+        hparams_kwargs = dict(
+            backend=backend,
+            per_core_batch_size=per_core_batch_size,
+            horizon_len=prediction_length,
+            context_len=hparams_context_len,
+            input_patch_len=input_patch_len,
+            output_patch_len=effective_output_patch_len,
+            num_layers=model_cfg["num_layers"],
+            model_dims=model_cfg["model_dims"],
+            quantiles=quantile_levels,
+        )
+        # use_positional_embedding was removed in newer timesfm versions
+        import inspect
+        if "use_positional_embedding" in inspect.signature(timesfm.TimesFmHparams).parameters:
+            hparams_kwargs["use_positional_embedding"] = model_cfg["use_positional_embedding"]
+
         tfm = timesfm.TimesFm(
-            hparams=timesfm.TimesFmHparams(
-                backend=backend,
-                per_core_batch_size=per_core_batch_size,
-                horizon_len=prediction_length,
-                context_len=hparams_context_len,
-                input_patch_len=input_patch_len,
-                output_patch_len=effective_output_patch_len,
-                num_layers=model_cfg["num_layers"],
-                model_dims=model_cfg["model_dims"],
-                use_positional_embedding=model_cfg["use_positional_embedding"],
-                quantiles=quantile_levels,
-            ),
+            hparams=timesfm.TimesFmHparams(**hparams_kwargs),
             checkpoint=timesfm.TimesFmCheckpoint(
                 huggingface_repo_id=model_cfg["repo_id"],
             ),
@@ -204,11 +209,16 @@ def run_timesfm_experiment(
             batch_freq = [freq_code] * len(batch_inputs)
 
             # TimesFM forecast
-            point_forecast, quantile_forecast = tfm.forecast(
-                batch_inputs,
+            forecast_kwargs = dict(
                 freq=batch_freq,
                 forecast_context_len=context_length,
-                normalize=normalize_inputs,
+            )
+            if "normalize" in inspect.signature(tfm.forecast).parameters:
+                forecast_kwargs["normalize"] = normalize_inputs
+
+            point_forecast, quantile_forecast = tfm.forecast(
+                batch_inputs,
+                **forecast_kwargs,
             )
 
             processed_quantile_forecast = quantile_forecast[:, :, 1:].transpose(0, 2, 1)  # (batch, 9, horizon)

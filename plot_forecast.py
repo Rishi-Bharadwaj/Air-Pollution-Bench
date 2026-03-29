@@ -81,6 +81,7 @@ def plot_forecast(
 
     # Single solid actual line — no gap
     ax.plot(actual_all.index, actual_all.values, color="steelblue", lw=1.5, label="Actual")
+    ax.scatter(actual_forecast.index, actual_forecast.values, color="steelblue", s=12, zorder=5, label="Actual (forecast window)")
     ax.plot(timestamps, pred_median, color="tomato", lw=1.5, label="Predicted (median)")
     ax.fill_between(timestamps, pred_q10, pred_q90, color="tomato", alpha=0.2, label="10th–90th pct")
     ax.axvline(forecast_start, color="gray", linestyle=":", alpha=0.8, label="Forecast start")

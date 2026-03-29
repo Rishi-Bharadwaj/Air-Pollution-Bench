@@ -75,7 +75,9 @@ def run_experiment(
             subprocess.run(["git", "clone", git_clone["url"], str(clone_dest)], check=True)
 
     # by uv's ephemeral --with environments.
-    venv_python = time_repo / ".venv" / "bin" / "python"
+    venv_python = time_repo / ".venv" / "Scripts" / "python.exe"
+    if not venv_python.exists():
+        venv_python = time_repo / ".venv" / "bin" / "python"
     python_bin = str(venv_python) if venv_python.exists() else "python"
 
     if packages:
