@@ -102,6 +102,8 @@ models:
     packages:
       - python-dotenv
       - pyarrow
+      - huggingface-hub==0.30.0
+      - transformers>=4.43
     args:
       context_length: 168
 
@@ -119,8 +121,11 @@ models:
 # Default datasets to run when no dataset= override is given
 datasets:
   # - Water_Quality_Darwin/15T
-  # - CPCB/H
-  - SG_PM25/H
+  - CPCB/H
+  # - SG_PM25/H
+  # - EPA/H
+  # - AURN/H
+  # - CNEMC/H 
 
 # Leaderboard settings
 leaderboard:

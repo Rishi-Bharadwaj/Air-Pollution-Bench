@@ -12,19 +12,40 @@ sources:
 
 datasets:
   CPCB/H:
-    test_length: 26136   # 3 years - 168
+    test_length: 17376   # 2 years - 168
+    # test_length: 1440
+    val_length: 0
+    short:
+      prediction_length: 24  # 1 week
+
+  EPA/H:
+    test_length: 17376   # 2 years - 168
     # test_length: 1440
     val_length: 0
     short:
       prediction_length: 24  # 1 week
 
 
-  SG_PM25/H:
-    test_length: 2208  # 3 months, 92 days; 2025.03.01 - 2025.05.31
-    val_length: 2160  # 3 months, 90 days; 2025.01.01 - 2025.03.31
+  AURN/H:
+    test_length: 17376   # 2 years - 168
+    # test_length: 1440
+    val_length: 0
     short:
-      prediction_length: 24    # 1 day; 2208/24 = 92 windows
-    medium:
-      prediction_length: 72    # 3 days; floor(2208/72) = 30 windows
-    long:
-      prediction_length: 168    # 7 days; floor(2208/168) = 13 windows
+      prediction_length: 24  # 1 week
+
+
+  CNEMC/H:
+    test_length: 17376   # 2 years - 168
+    # test_length: 1440
+    val_length: 0
+    short:
+      prediction_length: 24  # 1 week
+  # SG_PM25/H:
+  #   test_length: 2208  # 3 months, 92 days; 2025.03.01 - 2025.05.31
+  #   val_length: 2160  # 3 months, 90 days; 2025.01.01 - 2025.03.31
+  #   short:
+  #     prediction_length: 24    # 1 day; 2208/24 = 92 windows
+  #   medium:
+  #     prediction_length: 72    # 3 days; floor(2208/72) = 30 windows
+  #   long:
+  #     prediction_length: 168    # 7 days; floor(2208/168) = 13 windows

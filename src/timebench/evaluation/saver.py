@@ -136,8 +136,11 @@ def save_window_predictions(
     predictions_quantiles = np.zeros((num_series, num_windows, num_quantiles, num_variates, prediction_length))
     ground_truth = np.zeros((num_series, num_windows, num_variates, prediction_length))
 
-    # Find max context length for metrics computation
-    context_len = max(ctx.shape[-1] for ctx in contexts)
+    # Find max context length for metrics computation.
+    # Cap to 168 (model context length) to avoid OOM on long series.
+    MAX_CONTEXT_LEN = 168
+    actual_max_context = max(ctx.shape[-1] for ctx in contexts)
+    context_len = min(actual_max_context, MAX_CONTEXT_LEN)
     context_array = np.full((num_series, num_windows, num_variates, context_len), np.nan)
 
     print("    Organizing data into arrays...")
@@ -170,8 +173,9 @@ def save_window_predictions(
             predictions_quantiles[series_idx, window_idx, :, variate_idx, :] = fc_q[:, 0, :]
             ground_truth[series_idx, window_idx, variate_idx, :] = gt[0, :]
 
-            ctx_len_actual = ctx.shape[-1]
-            context_array[series_idx, window_idx, variate_idx, :ctx_len_actual] = ctx[0, :]
+            ctx_trimmed = ctx[0, -context_len:]  # last context_len points
+            ctx_len_actual = ctx_trimmed.shape[-1]
+            context_array[series_idx, window_idx, variate_idx, :ctx_len_actual] = ctx_trimmed
         else:
             series_idx = idx // num_windows
             window_idx = idx % num_windows
@@ -182,8 +186,9 @@ def save_window_predictions(
             # Handle context shape mismatch
             if ctx.shape[0] != num_variates and ctx.shape[-1] == num_variates:
                 ctx = ctx.T
-            ctx_len_actual = ctx.shape[-1]
-            context_array[series_idx, window_idx, :, :ctx_len_actual] = ctx
+            ctx_trimmed = ctx[..., -context_len:]  # last context_len points
+            ctx_len_actual = ctx_trimmed.shape[-1]
+            context_array[series_idx, window_idx, :, :ctx_len_actual] = ctx_trimmed
 
     # Compute forecast timestamps: shape (num_series, num_windows, prediction_length), Unix seconds
     freq_offset = to_offset(dataset.freq)
