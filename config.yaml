@@ -6,57 +6,58 @@ datasets_config: aq_datasets.yaml   # your dataset config (test/val/prediction l
 # Models and their dependencies
 models:
 
-  chronos_bolt:
-    script: experiments/chronos_bolt.py
-    packages:
-      - chronos-forecasting
-    args:
-      context_length: 168
+  # chronos_bolt:
+  #   script: experiments/chronos_bolt.py
+  #   packages:
+  #     - chronos-forecasting
+  #   args:
+  #     context_length: 168
 
-  chronos2:
-    script: experiments/chronos2.py
-    packages:
-      - chronos-forecasting
-    args:
-      context_length: 168
+  # chronos2:
+  #   script: experiments/chronos2.py
+  #   packages:
+  #     - chronos-forecasting
+  #   args:
+  #     context_length: 168
 
-  moirai:
-    script: experiments/moirai.py
-    packages:
-      - uni2ts
-    args:
-      context_length: 168
+  # moirai:
+  #   script: experiments/moirai.py
+  #   packages:
+  #     - uni2ts
+  #   args:
+  #     context_length: 168
 
-  moirai2:
-    script: experiments/moirai2.py
-    packages:
-      - uni2ts
-    args:
-      model_size: small   # only size currently released for moirai-2.0
-      context_length: 168
+  # moirai2:
+  #   script: experiments/moirai2.py
+  #   packages:
+  #     - uni2ts
+  #   args:
+  #     model_size: small   # only size currently released for moirai-2.0
+  #     context_length: 168
 
-  timesfm1:
-    script: experiments/timesfm1.0.py
-    packages:
-      - timesfm[torch]<1.3.0
-      - utilsforecast
-    args:
-      context_length: 168
+  # timesfm1:
+  #   script: experiments/timesfm1.0.py
+  #   packages:
+  #     - timesfm[torch]<1.3.0
+  #     - utilsforecast
+  #   args:
+  #     context_length: 168
 
-  timesfm2:
-    script: experiments/timesfm2.0.py
-    packages:
-      - timesfm[torch]<1.3.0
-      - utilsforecast
-    args:
-      context_length: 168
+  # timesfm2:
+  #   script: experiments/timesfm2.0.py
+  #   packages:
+  #     - timesfm[torch]<1.3.0
+  #     - utilsforecast
+  #   args:
+  #     context_length: 168
 
-  timesfm25:
-    script: experiments/timesfm2.5.py
-    packages:
-      - git+https://github.com/google-research/timesfm.git
-    args:
-      context_length: 168
+  # timesfm25:
+  #   script: experiments/timesfm2.5.py
+  #   packages:
+  #     - git+https://github.com/google-research/timesfm.git
+  #   args:
+  #     context_length: 168
+  
 
   sundial:
     script: experiments/sundial.py
@@ -64,6 +65,8 @@ models:
       - transformers==4.40.1
     args:
       context_length: 168
+      batch_size: 256
+      
 
   tirex:
     script: experiments/tirex_model.py
@@ -71,6 +74,7 @@ models:
       - tirex-ts
     args:
       context_length: 168
+      batch_size: 256
 
   toto:
     script: experiments/toto_model.py
@@ -79,6 +83,8 @@ models:
       # - setuptools==81.0.0
     args:
       context_length: 168
+      samples_per_batch: 10
+      num_samples: 10
 
   visionts:
     script: experiments/visiontspp.py
@@ -86,6 +92,7 @@ models:
       - visionts
     args:
       context_length: 168
+      batch_size: 256
 
   seasonal_naive:
     script: experiments/seasonal_naive.py
@@ -106,6 +113,7 @@ models:
       - transformers>=4.43
     args:
       context_length: 168
+      batch_size: 256
 
   # ttm:
   #   script: experiments/ttm.py
