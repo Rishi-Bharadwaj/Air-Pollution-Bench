@@ -365,28 +365,30 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
 
                     npz_metrics = np.load(metrics_path)
                     # metrics shape: (num_series, num_windows, num_variates)
-                    # Aggregate over windows and variates per series, then group by pollutant
-                    for series_idx, item_id in enumerate(item_ids):
-                        pollutant = extract_pollutant(item_id)
-                        row = {
-                            "model": model_name,
-                            "dataset_id": dataset_id,
-                            "horizon": horizon,
-                            "pollutant": pollutant,
-                        }
-                        for metric_name in ["MASE", "CRPS", "MAE", "MSE"]:
-                            arr = npz_metrics.get(metric_name)
-                            if arr is not None and series_idx < arr.shape[0]:
-                                row[metric_name] = np.nanmean(arr[series_idx])
-                            else:
-                                row[metric_name] = np.nan
-                        rows.append(row)
+                    # Pre-compute per-series means vectorized (over all dims except series)
+                    n_series = len(item_ids)
+                    batch = {
+                        "model": [model_name] * n_series,
+                        "dataset_id": [dataset_id] * n_series,
+                        "horizon": [horizon] * n_series,
+                        "pollutant": [extract_pollutant(iid) for iid in item_ids],
+                    }
+                    for metric_name in ["MASE", "CRPS", "MAE", "MSE"]:
+                        arr = npz_metrics.get(metric_name)
+                        if arr is not None and arr.shape[0] >= n_series:
+                            # Collapse all dims except series dim 0
+                            reduce_axes = tuple(range(1, arr.ndim))
+                            per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
+                            batch[metric_name] = per_series.tolist()
+                        else:
+                            batch[metric_name] = [np.nan] * n_series
+                    rows.append(pd.DataFrame(batch))
 
     if not rows:
         return pd.DataFrame(columns=["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "MSE"])
 
     # Aggregate per (model, dataset_id, horizon, pollutant)
-    df = pd.DataFrame(rows)
+    df = pd.concat(rows, ignore_index=True)
     return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[
         ["MASE", "CRPS", "MAE", "MSE"]
     ].mean()
