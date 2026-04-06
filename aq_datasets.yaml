@@ -7,9 +7,33 @@
 
 sources:
   CPCB/H:
-    csv_dir: /mnt/2TB_WD/rishi/cpcb/sites_imputed
+    csv_dir: /home/rishi/ML Projects/Air Pollution/CPCB/sites_imputed
     output_path: data/hf_dataset/CPCB/H
 
+  CNEMC/H:
+    csv_dir: /home/rishi/ML Projects/Air Pollution/CNEMC/imputed
+    output_path: data/hf_dataset/CNEMC/H
+
+  AURN/H:
+    csv_dir: /home/rishi/ML Projects/Air Pollution/AURN/imputed
+    output_path: data/hf_dataset/AURN/H
+
+  EPA/H:
+    csv_dir: /home/rishi/ML Projects/Air Pollution/EPA/imputed
+    output_path: data/hf_dataset/EPA/H
+
+  SINAICA/H:
+    csv_dir: /home/rishi/ML Projects/Air Pollution/SINAICA/imputed
+    output_path: data/hf_dataset/SINAICA/H
+
+  EEA_DE/H:
+    csv_dir: /home/rishi/ML Projects/Air Pollution/EEA/DE/imputed
+    output_path: data/hf_dataset/EEA_DE/H
+
+  EEA_FR/H:
+    csv_dir: /home/rishi/ML Projects/Air Pollution/EEA/FR/imputed
+    output_path: data/hf_dataset/EEA_FR/H
+  
 datasets:
   CPCB/H:
     test_length: 17376   # 2 years - 168
@@ -40,6 +64,28 @@ datasets:
     val_length: 0
     short:
       prediction_length: 24  # 1 week
+
+  SINAICA/H:
+    test_length: 17376   # 2 years - 168
+    # test_length: 1440
+    val_length: 0
+    short:
+      prediction_length: 24  # 1 week
+
+  EEA_DE/H:
+    test_length: 17376   # 2 years - 168
+    # test_length: 1440
+    val_length: 0
+    short:
+      prediction_length: 24  # 1 week
+
+  EEA_FR/H:
+    test_length: 17376   # 2 years - 168
+    # test_length: 1440
+    val_length: 0
+    short:
+      prediction_length: 24  # 1 week
+
   # SG_PM25/H:
   #   test_length: 2208  # 3 months, 92 days; 2025.03.01 - 2025.05.31
   #   val_length: 2160  # 3 months, 90 days; 2025.01.01 - 2025.03.31

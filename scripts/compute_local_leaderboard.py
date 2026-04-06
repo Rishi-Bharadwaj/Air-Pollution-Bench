@@ -73,13 +73,13 @@ def get_all_datasets_results(results_root: Path) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: DataFrame containing dataset-level results with columns
-            ["model", "dataset", "freq", "dataset_id", "horizon", "MASE", "CRPS", "MAE", "MSE"]
+            ["model", "dataset", "freq", "dataset_id", "horizon", "MASE", "CRPS", "MAE", "RMSE"]
     """
     rows = []
 
     if not results_root.exists():
         print(f"❌ Error: results_root={results_root} does not exist")
-        return pd.DataFrame(columns=["model", "dataset", "freq", "dataset_id", "horizon", "MASE", "CRPS", "MAE", "MSE"])
+        return pd.DataFrame(columns=["model", "dataset", "freq", "dataset_id", "horizon", "MASE", "CRPS", "MAE", "RMSE"])
 
     for model_dir in results_root.iterdir():
         if not model_dir.is_dir():
@@ -111,7 +111,7 @@ def get_all_datasets_results(results_root: Path) -> pd.DataFrame:
                     mase = np.nanmean(metrics_dict.get("MASE", np.array([])))
                     crps = np.nanmean(metrics_dict.get("CRPS", np.array([])))
                     mae = np.nanmean(metrics_dict.get("MAE", np.array([])))
-                    mse = np.nanmean(metrics_dict.get("MSE", np.array([])))
+                    rmse = np.nanmean(metrics_dict.get("RMSE", np.array([])))
 
                     rows.append({
                         "model": model_name,
@@ -122,13 +122,13 @@ def get_all_datasets_results(results_root: Path) -> pd.DataFrame:
                         "MASE": mase,
                         "CRPS": crps,
                         "MAE": mae,
-                        "MSE": mse,
+                        "RMSE": rmse,
                     })
 
     if rows:
         return pd.DataFrame(rows)
     else:
-        return pd.DataFrame(columns=["model", "dataset", "freq", "dataset_id", "horizon", "MASE", "CRPS", "MAE", "MSE"])
+        return pd.DataFrame(columns=["model", "dataset", "freq", "dataset_id", "horizon", "MASE", "CRPS", "MAE", "RMSE"])
 
 
 def compute_ranks(df: pd.DataFrame, groupby_cols: list) -> pd.DataFrame:
@@ -324,7 +324,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     and return per-pollutant aggregated metrics.
 
     Returns:
-        DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "MSE"]
+        DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"]
     """
     import json
     rows = []
@@ -373,7 +373,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
                         "horizon": [horizon] * n_series,
                         "pollutant": [extract_pollutant(iid) for iid in item_ids],
                     }
-                    for metric_name in ["MASE", "CRPS", "MAE", "MSE"]:
+                    for metric_name in ["MASE", "CRPS", "MAE", "RMSE"]:
                         arr = npz_metrics.get(metric_name)
                         if arr is not None and arr.shape[0] >= n_series:
                             # Collapse all dims except series dim 0
@@ -385,12 +385,12 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
                     rows.append(pd.DataFrame(batch))
 
     if not rows:
-        return pd.DataFrame(columns=["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "MSE"])
+        return pd.DataFrame(columns=["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"])
 
     # Aggregate per (model, dataset_id, horizon, pollutant)
     df = pd.concat(rows, ignore_index=True)
     return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[
-        ["MASE", "CRPS", "MAE", "MSE"]
+        ["MASE", "CRPS", "MAE", "RMSE"]
     ].mean()
 
 
@@ -569,7 +569,7 @@ def main():
 
             for pollutant in dataset_pollutants:
                 pdf = ddf[ddf["pollutant"] == pollutant]
-                agg = pdf.groupby("model")[["MASE", "CRPS", "MAE", "MSE"]].mean().reset_index()
+                agg = pdf.groupby("model")[["MASE", "CRPS", "MAE", "RMSE"]].mean().reset_index()
                 agg = agg.sort_values(by=metric, ascending=True).reset_index(drop=True)
                 agg = agg.round(4)
 
