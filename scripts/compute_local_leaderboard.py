@@ -375,7 +375,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
                     }
                     for metric_name in ["MASE", "CRPS", "MAE", "RMSE"]:
                         arr = npz_metrics.get(metric_name)
-                        if arr is not None and arr.shape[0] >= n_series:
+                        if arr is not None and arr.shape[0] == n_series:
                             # Collapse all dims except series dim 0
                             reduce_axes = tuple(range(1, arr.ndim))
                             per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]

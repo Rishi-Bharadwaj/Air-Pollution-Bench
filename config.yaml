@@ -12,7 +12,7 @@ models:
       - chronos-forecasting
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   chronos2:
     script: experiments/chronos2.py
@@ -20,24 +20,26 @@ models:
       - chronos-forecasting
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   moirai:
     script: experiments/moirai.py
     packages:
       - uni2ts
+      - huggingface-hub==0.30.0
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   moirai2:
     script: experiments/moirai2.py
     packages:
       - uni2ts
+      - huggingface-hub==0.30.0
     args:
       model_size: small   # only size currently released for moirai-2.0
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   timesfm1:
     script: experiments/timesfm1.0.py
@@ -46,7 +48,7 @@ models:
       - utilsforecast
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   timesfm2:
     script: experiments/timesfm2.0.py
@@ -55,7 +57,7 @@ models:
       - utilsforecast
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   timesfm25:
     script: experiments/timesfm2.5.py
@@ -63,7 +65,7 @@ models:
       - git+https://github.com/google-research/timesfm.git
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
   
 
   sundial:
@@ -72,7 +74,7 @@ models:
       - transformers==4.40.1
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
       
 
   tirex:
@@ -81,7 +83,7 @@ models:
       - tirex-ts
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   # toto:
   #   script: experiments/toto_model.py
@@ -99,7 +101,7 @@ models:
       - visionts
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   seasonal_naive:
     script: experiments/seasonal_naive.py
@@ -120,7 +122,7 @@ models:
       - transformers>=4.43
     args:
       context_length: 168
-      batch_size: 512
+      batch_size: 1024
 
   # ttm:
   #   script: experiments/ttm.py
@@ -136,12 +138,13 @@ models:
 # Default datasets to run when no dataset= override is given
 datasets:
   # - CPCB/H
-  # - EPA/H
-  # - AURN/H
+  - AURN/H
+  - EPA/H
+ 
   # - CNEMC/H 
-  - SINAICA/H
-  - EEA_DE/H
-  - EEA_FR/H
+  # - SINAICA/H
+  # - EEA_DE/H
+  # - EEA_FR/H
 
 # Leaderboard settings
 leaderboard:
