@@ -1,6 +1,6 @@
 # Paths relative to this file's location
 time_repo: .                     # path to the TIME repo (contains experiments/)
-data_dir: ./data2/hf_dataset     # where converted HF Arrow datasets live (= TIME_DATASET)
+data_dir: ./data/hf_dataset     # where converted HF Arrow datasets live (= TIME_DATASET)
 datasets_config: aq_datasets.yaml   # your dataset config (test/val/prediction lengths)
 
 # Models and their dependencies
@@ -109,7 +109,16 @@ models:
       - statsforecast
     args:
       context_length: 168
+      n_jobs: 24
 
+  auto_arima:
+    script: experiments/auto_arima.py
+    packages:
+      - statsforecast
+    args:
+      context_length: 168
+      n_jobs: 24
+      
   kairos:
     script: experiments/kairos_model.py
     git_clone:
@@ -137,10 +146,9 @@ models:
     
 # Default datasets to run when no dataset= override is given
 datasets:
-  # - CPCB/H
-  - AURN/H
-  - EPA/H
- 
+  - CPCB/H
+  # - AURN/H
+  # - EPA/H
   # - CNEMC/H 
   # - SINAICA/H
   # - EEA_DE/H

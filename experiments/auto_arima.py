@@ -1,15 +1,15 @@
 """
-Seasonal Naive baseline experiments for time series forecasting.
+AutoARIMA baseline experiments for time series forecasting.
 
-The Seasonal Naive method forecasts the value from the same season
-in the previous seasonal cycle. This is a simple but effective baseline
-for seasonal time series.
+This script uses the AutoARIMA model from statsforecast via the GluonTS
+``gluonts.ext.statsforecast.AutoARIMAPredictor`` wrapper. AutoARIMA
+automatically selects the best ARIMA model order for each series.
 
 Usage:
-    python experiments/seasonal_naive.py
-    python experiments/seasonal_naive.py --dataset "SG_Weather/D" --terms short medium long
-    python experiments/seasonal_naive.py --dataset "SG_Weather/D" "SG_PM25/H"  # Multiple datasets
-    python experiments/seasonal_naive.py --dataset all_datasets  # Run all datasets from config
+    python experiments/auto_arima.py
+    python experiments/auto_arima.py --dataset "SG_Weather/D" --terms short medium long
+    python experiments/auto_arima.py --dataset "SG_Weather/D" "SG_PM25/H"  # Multiple datasets
+    python experiments/auto_arima.py --dataset all_datasets  # Run all datasets from config
 """
 
 import argparse
@@ -25,7 +25,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from gluonts.time_feature import get_seasonality
 from statsforecast import StatsForecast
-from statsforecast.models import SeasonalNaive
+from statsforecast.models import AutoARIMA
 from tqdm.auto import tqdm
 
 from timebench.evaluation import save_window_predictions
@@ -40,17 +40,17 @@ from timebench.evaluation.utils import get_available_terms
 load_dotenv()
 
 
-
-def run_seasonal_naive_experiment(
+def run_auto_arima_experiment(
     dataset_name: str,
     terms: list[str] = None,
     output_dir: str | None = None,
     context_length: int | None = None,
     config_path: Path | None = None,
+    quantile_levels: list[float] | None = None,
     n_jobs: int = 1,
 ):
     """
-    Run Seasonal Naive baseline experiments on a dataset with specified terms.
+    Run AutoARIMA baseline experiments on a dataset with specified terms.
 
     Args:
         dataset_name: Dataset name (e.g., "SG_Weather/D")
@@ -58,7 +58,6 @@ def run_seasonal_naive_experiment(
         output_dir: Output directory for results
         context_length: Maximum context length; crops to last N timesteps if longer
         config_path: Path to datasets.yaml config file
-        n_jobs: Number of parallel workers for statsforecast
     """
     # Load dataset configuration
     print("Loading configuration...")
@@ -71,15 +70,21 @@ def run_seasonal_naive_experiment(
             raise ValueError(f"No terms defined for dataset '{dataset_name}' in config")
 
     if output_dir is None:
-        output_dir = "./output/results/seasonal_naive"
+        output_dir = "./output/results/auto_arima"
 
     os.makedirs(output_dir, exist_ok=True)
 
+    if quantile_levels is None:
+        quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+
     print(f"\n{'='*60}")
-    print(f"Model: Seasonal Naive")
+    print(f"Model: AutoARIMA")
     print(f"Dataset: {dataset_name}")
     print(f"Terms: {terms}")
     print(f"{'='*60}")
+
+
 
     for term in terms:
         print(f"\n--- Term: {term} ---")
@@ -93,7 +98,7 @@ def run_seasonal_naive_experiment(
         print(f"  Config: prediction_length={prediction_length}, test_length={test_length}, val_length={val_length}")
 
         # Initialize the dataset
-        to_univariate = False if Dataset(name=dataset_name, term=term,to_univariate=False).target_dim == 1 else True
+        to_univariate = False if Dataset(name=dataset_name, term=term, to_univariate=False).target_dim == 1 else True
 
         # Load dataset with config settings
         dataset = Dataset(
@@ -135,10 +140,11 @@ def run_seasonal_naive_experiment(
 
         # Build one long-format DataFrame: one unique_id per test window.
         # ds values are synthetic -- statsforecast only needs a monotonic
-        # datetime index at the correct frequency.
+        # datetime index at the correct frequency; absolute dates do not
+        # affect the AutoARIMA fit.
         anchor = pd.Timestamp("2000-01-01")
         frames = []
-        for i, entry in enumerate(tqdm(inputs, desc=f"SeasonalNaive {term} (prep)")):
+        for i, entry in enumerate(tqdm(inputs, desc=f"AutoARIMA {term} (prep)")):
             y = np.asarray(entry["target"], dtype=float)
             ds = pd.date_range(anchor, periods=len(y), freq=dataset.freq)
             frames.append(pd.DataFrame({
@@ -149,29 +155,30 @@ def run_seasonal_naive_experiment(
         long_df = pd.concat(frames, ignore_index=True)
 
         sf = StatsForecast(
-            models=[SeasonalNaive(season_length=season_length)],
+            models=[AutoARIMA(season_length=season_length)],
             freq=dataset.freq,
             n_jobs=n_jobs,
             verbose=True
         )
-        print(f"  Forecasting SeasonalNaive on {len(inputs)} windows with n_jobs={n_jobs}...")
+        print(f"  Fitting AutoARIMA on {len(inputs)} windows with n_jobs={n_jobs}...")
         fc_df = sf.forecast(
             df=long_df,
             h=dataset.prediction_length,
             level=[20, 40, 60, 80],
         )
 
-        # Map requested quantiles to statsforecast prediction-interval columns.
+        # Map requested quantiles to statsforecast prediction-interval columns
+        # (symmetric Gaussian intervals; mean == median for ARIMA).
         q_cols = [
-            "SeasonalNaive-lo-80",  # 0.1
-            "SeasonalNaive-lo-60",  # 0.2
-            "SeasonalNaive-lo-40",  # 0.3
-            "SeasonalNaive-lo-20",  # 0.4
-            "SeasonalNaive",        # 0.5
-            "SeasonalNaive-hi-20",  # 0.6
-            "SeasonalNaive-hi-40",  # 0.7
-            "SeasonalNaive-hi-60",  # 0.8
-            "SeasonalNaive-hi-80",  # 0.9
+            "AutoARIMA-lo-80",  # 0.1
+            "AutoARIMA-lo-60",  # 0.2
+            "AutoARIMA-lo-40",  # 0.3
+            "AutoARIMA-lo-20",  # 0.4
+            "AutoARIMA",        # 0.5
+            "AutoARIMA-hi-20",  # 0.6
+            "AutoARIMA-hi-40",  # 0.7
+            "AutoARIMA-hi-60",  # 0.8
+            "AutoARIMA-hi-80",  # 0.9
         ]
         fc_df = fc_df.sort_values(["unique_id", "ds"])
         arr = fc_df[q_cols].to_numpy()  # (num_instances * h, num_quantiles)
@@ -185,7 +192,9 @@ def run_seasonal_naive_experiment(
 
         # Prepare model hyperparameters for metadata
         model_hyperparams = {
+            "model": "AutoARIMA",
             "season_length": season_length,
+            "quantile_levels": quantile_levels,
         }
 
         metadata = save_window_predictions(
@@ -206,7 +215,7 @@ def run_seasonal_naive_experiment(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Seasonal Naive baseline experiments")
+    parser = argparse.ArgumentParser(description="Run AutoARIMA baseline experiments")
     parser.add_argument("--dataset", type=str, nargs="+", default=["Port_Activity/D"],
                         help="Dataset name(s). Can be a single dataset, multiple datasets, or 'all_datasets' to run all datasets from config")
     parser.add_argument("--terms", type=str, nargs="+", default=None,
@@ -219,7 +228,7 @@ def main():
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
     parser.add_argument("--n-jobs", type=int, default=1,
-                        help="Number of parallel workers for statsforecast (-1 = all cores)")
+                        help="Number of parallel workers for per-instance ARIMA fits (-1 = all cores)")
     args = parser.parse_args()
 
     # Handle dataset list or 'all_datasets'
@@ -244,7 +253,7 @@ def main():
         print(f"{'#'*60}")
 
         try:
-            run_seasonal_naive_experiment(
+            run_auto_arima_experiment(
                 dataset_name=dataset_name,
                 terms=args.terms,
                 output_dir=args.output_dir,
@@ -268,4 +277,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
