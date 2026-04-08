@@ -328,7 +328,8 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     """
     import json
     rows = []
-
+    dropped={}
+    MASE_THRESHOLD=100
     for model_dir in results_root.iterdir():
         if not model_dir.is_dir():
             continue
@@ -379,6 +380,16 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
                             # Collapse all dims except series dim 0
                             reduce_axes = tuple(range(1, arr.ndim))
                             per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
+                            if metric_name == "MASE":
+                                nan_pre_mask = np.isnan(per_series)
+                                over_threshold_mask = ~nan_pre_mask & (per_series > MASE_THRESHOLD)
+                                per_series = np.where(over_threshold_mask, np.nan, per_series)
+                                if over_threshold_mask.any():
+                                    from collections import Counter
+                                    dropped[(model_name, dataset_id, horizon)] = dict(Counter(
+                                        batch["pollutant"][i]
+                                        for i in np.where(over_threshold_mask)[0]
+                                    ))
                             batch[metric_name] = per_series.tolist()
                         else:
                             batch[metric_name] = [np.nan] * n_series
@@ -387,6 +398,8 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     if not rows:
         return pd.DataFrame(columns=["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"])
 
+    if dropped:
+        print(dropped)
     # Aggregate per (model, dataset_id, horizon, pollutant)
     df = pd.concat(rows, ignore_index=True)
     return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[
