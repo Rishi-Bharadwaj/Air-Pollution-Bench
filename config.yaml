@@ -6,84 +6,84 @@ datasets_config: aq_datasets.yaml   # your dataset config (test/val/prediction l
 # Models and their dependencies
 models:
 
-  chronos_bolt:
-    script: experiments/chronos_bolt.py
-    packages:
-      - chronos-forecasting
-    args:
-      context_length: 168
-      batch_size: 1024
+  # chronos_bolt:
+  #   script: experiments/chronos_bolt.py
+  #   packages:
+  #     - chronos-forecasting
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
-  chronos2:
-    script: experiments/chronos2.py
-    packages:
-      - chronos-forecasting
-    args:
-      context_length: 168
-      batch_size: 1024
+  # chronos2:
+  #   script: experiments/chronos2.py
+  #   packages:
+  #     - chronos-forecasting
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
-  moirai:
-    script: experiments/moirai.py
-    packages:
-      - uni2ts
-      - huggingface-hub==0.30.0
-    args:
-      context_length: 168
-      batch_size: 1024
+  # moirai:
+  #   script: experiments/moirai.py
+  #   packages:
+  #     - uni2ts
+  #     - huggingface-hub==0.30.0
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
-  moirai2:
-    script: experiments/moirai2.py
-    packages:
-      - uni2ts
-      - huggingface-hub==0.30.0
-    args:
-      model_size: small   # only size currently released for moirai-2.0
-      context_length: 168
-      batch_size: 1024
+  # moirai2:
+  #   script: experiments/moirai2.py
+  #   packages:
+  #     - uni2ts
+  #     - huggingface-hub==0.30.0
+  #   args:
+  #     model_size: small   # only size currently released for moirai-2.0
+  #     context_length: 168
+  #     batch_size: 1024
 
-  timesfm1:
-    script: experiments/timesfm1.0.py
-    packages:
-      - timesfm[torch]<1.3.0
-      - utilsforecast
-    args:
-      context_length: 168
-      batch_size: 1024
+  # timesfm1:
+  #   script: experiments/timesfm1.0.py
+  #   packages:
+  #     - timesfm[torch]<1.3.0
+  #     - utilsforecast
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
-  timesfm2:
-    script: experiments/timesfm2.0.py
-    packages:
-      - timesfm[torch]<1.3.0
-      - utilsforecast
-    args:
-      context_length: 168
-      batch_size: 1024
+  # timesfm2:
+  #   script: experiments/timesfm2.0.py
+  #   packages:
+  #     - timesfm[torch]<1.3.0
+  #     - utilsforecast
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
-  timesfm25:
-    script: experiments/timesfm2.5.py
-    packages:
-      - git+https://github.com/google-research/timesfm.git
-    args:
-      context_length: 168
-      batch_size: 1024
+  # timesfm25:
+  #   script: experiments/timesfm2.5.py
+  #   packages:
+  #     - git+https://github.com/google-research/timesfm.git
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
   
 
-  sundial:
-    script: experiments/sundial.py
-    packages:
-      - transformers==4.40.1
-    args:
-      context_length: 168
-      batch_size: 1024
+  # sundial:
+  #   script: experiments/sundial.py
+  #   packages:
+  #     - transformers==4.40.1
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
       
 
-  tirex:
-    script: experiments/tirex_model.py
-    packages:
-      - tirex-ts
-    args:
-      context_length: 168
-      batch_size: 1024
+  # tirex:
+  #   script: experiments/tirex_model.py
+  #   packages:
+  #     - tirex-ts
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
   # toto:
   #   script: experiments/toto_model.py
@@ -95,43 +95,51 @@ models:
   #     samples_per_batch: 100
   #     num_samples: 100
 
-  visionts:
-    script: experiments/visiontspp.py
-    packages:
-      - visionts
-    args:
-      context_length: 168
-      batch_size: 1024
+  # visionts:
+  #   script: experiments/visiontspp.py
+  #   packages:
+  #     - visionts
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
-  seasonal_naive:
-    script: experiments/seasonal_naive.py
-    packages:
-      - statsforecast
-    args:
-      context_length: 168
-      n_jobs: 24
+  # seasonal_naive:
+  #   script: experiments/seasonal_naive.py
+  #   packages:
+  #     - statsforecast
+  #   args:
+  #     context_length: 168
+  #     n_jobs: 24
 
-  auto_arima:
-    script: experiments/auto_arima.py
+  # auto_arima:
+  #   script: experiments/auto_arima.py
+  #   packages:
+  #     - statsforecast
+  #   args:
+  #     context_length: 168
+  #     n_jobs: 24
+
+  auto_ets:
+    script: experiments/auto_ets.py
     packages:
       - statsforecast
     args:
       context_length: 168
       n_jobs: 24
       
-  kairos:
-    script: experiments/kairos_model.py
-    git_clone:
-      url: https://github.com/foundation-model-research/Kairos.git
-      dest: experiments/Kairos
-    packages:
-      - python-dotenv
-      - pyarrow
-      - huggingface-hub==0.30.0
-      - transformers>=4.43
-    args:
-      context_length: 168
-      batch_size: 1024
+  # kairos:
+  #   script: experiments/kairos_model.py
+  #   git_clone:
+  #     url: https://github.com/foundation-model-research/Kairos.git
+  #     dest: experiments/Kairos
+  #   packages:
+  #     - python-dotenv
+  #     - pyarrow
+  #     - huggingface-hub==0.30.0
+  #     - transformers>=4.43
+  #   args:
+  #     context_length: 168
+  #     batch_size: 1024
 
   # ttm:
   #   script: experiments/ttm.py
