@@ -167,6 +167,13 @@ def run_auto_ets_experiment(
             h=dataset.prediction_length,
             level=[20, 40, 60, 80],
         )
+        # Check for exploding intervals
+        hi_col = "AutoETS-hi-80"
+        lo_col = "AutoETS-lo-80"
+        interval_width = fc_df[hi_col] - fc_df[lo_col]
+        print(f"Interval width: max={interval_width.max():.2f}, mean={interval_width.mean():.2f}, p99={interval_width.quantile(0.99):.2f}")
+        print(f"NaN count: {fc_df[q_cols].isna().sum().sum()}")
+        print(f"Inf count: {np.isinf(fc_df[q_cols].to_numpy()).sum()}")
 
         # Map requested quantiles to statsforecast prediction-interval columns
         # (symmetric Gaussian intervals; mean == median for ETS additive models).

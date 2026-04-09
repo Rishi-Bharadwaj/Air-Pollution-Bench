@@ -163,27 +163,27 @@ models:
       num_threads: 1             # load everything in RAM; no multi-proc features
       device: cuda               # 5090 handles this easily
 
-  patchtst:
-    script: experiments/patchtst.py
-    packages:
-      - neuralforecast
-      - lightning>=2.5.0
-      - torch
-      - utilsforecast
-    args:
-      context_length: 168        # 1 week of hourly history
-      encoder_layers: 3
-      n_heads: 16
-      hidden_size: 128
-      linear_hidden_size: 256
-      dropout: 0.2
-      patch_len: 16
-      stride: 8
-      max_steps: 2000            # training steps per pollutant (tune later)
-      batch_size: 32             # series-level batch
-      windows_batch_size: 1024   # window-level batch fed to the model
-      learning_rate: 0.0001
-      scaler_type: standard
+  # patchtst:
+  #   script: experiments/patchtst.py
+  #   packages:
+  #     - neuralforecast
+  #     - lightning>=2.5.0
+  #     - torch
+  #     - utilsforecast
+  #   args:
+  #     context_length: 168        # 1 week of hourly history
+  #     encoder_layers: 3
+  #     n_heads: 16
+  #     hidden_size: 128
+  #     linear_hidden_size: 256
+  #     dropout: 0.2
+  #     patch_len: 16
+  #     stride: 8
+  #     max_steps: 2000            # training steps per pollutant (tune later)
+  #     batch_size: 32             # series-level batch
+  #     windows_batch_size: 1024   # window-level batch fed to the model
+  #     learning_rate: 0.0001
+  #     scaler_type: standard
       
   # kairos:
   #   script: experiments/kairos_model.py
@@ -225,8 +225,8 @@ leaderboard:
   results_dir: output/results
   datasets:             # leave empty or omit to use all datasets in results_dir
     - CPCB/H
-    - SINAICA/H
-    - EEA_DE/H
-    - EEA_FR/H
+    # - SINAICA/H
+    # - EEA_DE/H
+    # - EEA_FR/H
   metric: MASE          # sort by this metric
   air_pollution: true   # per-pollutant leaderboard instead of original overall leaderboard
