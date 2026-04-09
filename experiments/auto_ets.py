@@ -156,7 +156,7 @@ def run_auto_ets_experiment(
         long_df = pd.concat(frames, ignore_index=True)
 
         sf = StatsForecast(
-            models=[AutoETS(season_length=season_length)],
+            models=[AutoETS(season_length=season_length, model="AZA")],
             freq=dataset.freq,
             n_jobs=n_jobs,
             verbose=True
@@ -168,13 +168,6 @@ def run_auto_ets_experiment(
             level=[20, 40, 60, 80],
         )
         # Check for exploding intervals
-        hi_col = "AutoETS-hi-80"
-        lo_col = "AutoETS-lo-80"
-        interval_width = fc_df[hi_col] - fc_df[lo_col]
-        print(f"Interval width: max={interval_width.max():.2f}, mean={interval_width.mean():.2f}, p99={interval_width.quantile(0.99):.2f}")
-        print(f"NaN count: {fc_df[q_cols].isna().sum().sum()}")
-        print(f"Inf count: {np.isinf(fc_df[q_cols].to_numpy()).sum()}")
-
         # Map requested quantiles to statsforecast prediction-interval columns
         # (symmetric Gaussian intervals; mean == median for ETS additive models).
         q_cols = [
@@ -189,7 +182,13 @@ def run_auto_ets_experiment(
             "AutoETS-hi-80",  # 0.9
         ]
         fc_df = fc_df.sort_values(["unique_id", "ds"])
-
+        
+        # hi_col = "AutoETS-hi-80"
+        # lo_col = "AutoETS-lo-80"
+        # interval_width = fc_df[hi_col] - fc_df[lo_col]
+        # print(f"Interval width: max={interval_width.max():.2f}, mean={interval_width.mean():.2f}, p99={interval_width.quantile(0.99):.2f}")
+        # print(f"NaN count: {fc_df[q_cols].isna().sum().sum()}")
+        # print(f"Inf count: {np.isinf(fc_df[q_cols].to_numpy()).sum()}")
         # NaN-quantile fallback (disabled): downstream metric aggregation uses
         # np.nanmean, so NaN windows are skipped rather than poisoning averages.
         # Re-enable if you'd rather rescue those windows with an additive-only
@@ -218,6 +217,7 @@ def run_auto_ets_experiment(
         num_instances = len(inputs)
         h = dataset.prediction_length
         # (num_instances, h, num_quantiles) -> (num_instances, num_quantiles, h)
+        assert len(fc_df) == num_instances * h, f"Expected {num_instances * h} rows, got {len(fc_df)}"
         fc_quantiles = arr.reshape(num_instances, h, len(q_cols)).transpose(0, 2, 1)
 
         # Compute metrics
