@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import gc
 import os
 import sys
 import time
@@ -27,8 +28,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
 import pandas as pd
+from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from dotenv import load_dotenv
 from gluonts.time_feature import get_seasonality
+from tqdm.auto import tqdm
 
 from timebench.evaluation import save_window_predictions
 from timebench.evaluation.data import (
@@ -42,8 +45,8 @@ from timebench.evaluation.utils import get_available_terms
 load_dotenv()
 
 
-def _gluonts_entries_to_ag_df(entries, freq):
-    """Convert a list of GluonTS data entries to an AutoGluon-style long DataFrame."""
+def _entries_to_ag_df(entries, freq):
+    """Convert GluonTS data entries to an AutoGluon long DataFrame."""
     anchor = pd.Timestamp("2000-01-01")
     frames = []
     for i, entry in enumerate(entries):
@@ -64,15 +67,14 @@ def run_dlinear_experiment(
     context_length: int | None = None,
     config_path: Path | None = None,
     quantile_levels: list[float] | None = None,
-    max_epochs: int = 50,
+    max_epochs: int = 100,
     lr: float = 1e-3,
+    batch_size: int = 4096,
 ):
     """
     Train one DLinear model per pollutant group and save quantile
     forecasts on the test split.
     """
-    from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
-
     # Load dataset configuration
     print("Loading configuration...")
     config = load_dataset_config(config_path)
@@ -168,9 +170,8 @@ def run_dlinear_experiment(
             )
 
             # --- Build training DataFrame ---
-            # Each training series gets a unique item_id "train_{s_idx}"
             train_group = [training_entries[i] for i in series_indices]
-            train_df = _gluonts_entries_to_ag_df(train_group, dataset.freq)
+            train_df = _entries_to_ag_df(train_group, dataset.freq)
             train_tsdf = TimeSeriesDataFrame.from_data_frame(
                 train_df, id_column="item_id", timestamp_column="timestamp",
             )
@@ -185,23 +186,20 @@ def run_dlinear_experiment(
                 "DLinear": {
                     "max_epochs": max_epochs,
                     "lr": lr,
+                    "batch_size": batch_size,
                 },
             }
             if context_length is not None:
                 hyperparams["DLinear"]["context_length"] = context_length
 
             t0 = time.perf_counter()
-            predictor.fit(
-                train_tsdf,
-                hyperparameters=hyperparams,
-            )
+            predictor.fit(train_tsdf, hyperparameters=hyperparams)
             train_elapsed = time.perf_counter() - t0
             print(f"  [{pollutant}] training done in {train_elapsed:.1f}s")
 
-            # --- Predict per test window ---
-            # Gather this pollutant's test windows and build a single predict df.
-            # Each test window becomes its own item_id so AutoGluon predicts from
-            # the end of each context independently.
+            del train_df, train_tsdf, train_group
+
+            # --- Predict per test window (chunked to limit memory) ---
             group_test_inputs = []
             dest_flat_indices = []
             for s_idx in series_indices:
@@ -210,21 +208,35 @@ def run_dlinear_experiment(
                     group_test_inputs.append(test_inputs[base + w])
                     dest_flat_indices.append(base + w)
 
-            print(f"    [{pollutant}] Predicting {len(group_test_inputs)} test windows...")
-            pred_df = _gluonts_entries_to_ag_df(group_test_inputs, dataset.freq)
-            pred_tsdf = TimeSeriesDataFrame.from_data_frame(
-                pred_df, id_column="item_id", timestamp_column="timestamp",
-            )
+            num_total = len(group_test_inputs)
+            PRED_CHUNK = 20_000
+            print(f"    [{pollutant}] Predicting {num_total} test windows (chunks of {PRED_CHUNK})...")
 
-            predictions = predictor.predict(pred_tsdf)
-
-            # predictions is a TimeSeriesDataFrame with columns like "mean", "0.1", "0.2", ...
-            # Each item_id has h rows. Items are in the same order as group_test_inputs.
             q_cols = [str(q) for q in quantile_levels]
-            for local_idx, dest_idx in enumerate(dest_flat_indices):
-                item_preds = predictions.loc[str(local_idx)]  # h rows
-                q_arr = item_preds[q_cols].to_numpy().T  # (num_q, h)
-                fc_quantiles[dest_idx] = q_arr
+
+            num_chunks = (num_total + PRED_CHUNK - 1) // PRED_CHUNK
+            for chunk_start in tqdm(range(0, num_total, PRED_CHUNK), total=num_chunks, desc=f"    {pollutant} predict"):
+                chunk_end = min(chunk_start + PRED_CHUNK, num_total)
+                chunk_inputs = group_test_inputs[chunk_start:chunk_end]
+                chunk_dest = dest_flat_indices[chunk_start:chunk_end]
+
+                pred_df = _entries_to_ag_df(chunk_inputs, dataset.freq)
+                pred_tsdf = TimeSeriesDataFrame.from_data_frame(
+                    pred_df, id_column="item_id", timestamp_column="timestamp",
+                )
+                predictions = predictor.predict(pred_tsdf)
+
+                # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
+                # with columns "mean", "0.1", "0.2", ..., "0.9"
+                for local_idx, dest_idx in enumerate(chunk_dest):
+                    item_preds = predictions.loc[str(local_idx)]  # h rows
+                    q_arr = item_preds[q_cols].to_numpy().T  # (num_q, h)
+                    fc_quantiles[dest_idx] = q_arr
+
+                del pred_df, pred_tsdf, predictions
+
+            del predictor
+            gc.collect()
 
         assert fc_quantiles.shape == (expected_instances, num_q, h)
 
@@ -235,6 +247,7 @@ def run_dlinear_experiment(
             "context_length": effective_context_length,
             "max_epochs": max_epochs,
             "lr": lr,
+            "batch_size": batch_size,
             "season_length": season_length,
             "quantile_levels": quantile_levels,
         }
@@ -270,8 +283,9 @@ def main():
                         help="Context length fed to DLinear. Defaults to prediction_length.")
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
-    parser.add_argument("--max-epochs", type=int, default=50, help="Max training epochs")
+    parser.add_argument("--max-epochs", type=int, default=100, help="Max training epochs")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--batch-size", type=int, default=4096, help="Batch size")
     parser.add_argument("--quantiles", type=float, nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
                         help="Quantile levels to save")
@@ -305,6 +319,7 @@ def main():
                 quantile_levels=args.quantiles,
                 max_epochs=args.max_epochs,
                 lr=args.lr,
+                batch_size=args.batch_size,
             )
         except Exception as e:
             print(f"ERROR: Failed to run experiment for {dataset_name}: {e}")
