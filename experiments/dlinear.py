@@ -69,7 +69,6 @@ def run_dlinear_experiment(
     quantile_levels: list[float] | None = None,
     max_epochs: int = 100,
     lr: float = 1e-3,
-    batch_size: int = 4096,
 ):
     """
     Train one DLinear model per pollutant group and save quantile
@@ -186,7 +185,6 @@ def run_dlinear_experiment(
                 "DLinear": {
                     "max_epochs": max_epochs,
                     "lr": lr,
-                    "batch_size": batch_size,
                 },
             }
             if context_length is not None:
@@ -209,7 +207,7 @@ def run_dlinear_experiment(
                     dest_flat_indices.append(base + w)
 
             num_total = len(group_test_inputs)
-            PRED_CHUNK = 20_000
+            PRED_CHUNK = 10_000
             print(f"    [{pollutant}] Predicting {num_total} test windows (chunks of {PRED_CHUNK})...")
 
             q_cols = [str(q) for q in quantile_levels]
@@ -247,7 +245,6 @@ def run_dlinear_experiment(
             "context_length": effective_context_length,
             "max_epochs": max_epochs,
             "lr": lr,
-            "batch_size": batch_size,
             "season_length": season_length,
             "quantile_levels": quantile_levels,
         }
@@ -285,7 +282,6 @@ def main():
                         help="Path to datasets.yaml config file")
     parser.add_argument("--max-epochs", type=int, default=100, help="Max training epochs")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--batch-size", type=int, default=4096, help="Batch size")
     parser.add_argument("--quantiles", type=float, nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
                         help="Quantile levels to save")
@@ -319,7 +315,6 @@ def main():
                 quantile_levels=args.quantiles,
                 max_epochs=args.max_epochs,
                 lr=args.lr,
-                batch_size=args.batch_size,
             )
         except Exception as e:
             print(f"ERROR: Failed to run experiment for {dataset_name}: {e}")
