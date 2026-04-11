@@ -404,7 +404,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     df = pd.concat(rows, ignore_index=True)
     return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[
         ["MASE", "CRPS", "MAE", "RMSE"]
-    ].mean()
+    ].median()
 
 
 def get_pollutant_balanced_leaderboard(

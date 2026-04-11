@@ -184,7 +184,11 @@ def run_sundial_experiment(
             all_inputs.append(ts)
 
         total_items = len(all_inputs)
-        raw_predictions = []
+        fc_quantiles = []
+
+        if quantile_levels is None:
+            quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        quantile_levels_array = np.asarray(quantile_levels, dtype=float)
 
         steps = range(0, total_items, batch_size)
 
@@ -202,22 +206,17 @@ def run_sundial_experiment(
                 if isinstance(batch_out, tuple):
                     batch_out = batch_out[0]
 
-                raw_predictions.append(batch_out.cpu().numpy())
+                # Compute quantiles per batch to avoid accumulating 100 samples per instance
+                batch_samples = _normalize_samples_array(batch_out.cpu().numpy(), prediction_length)
+                batch_q = np.quantile(batch_samples, quantile_levels_array, axis=1)
+                fc_quantiles.append(np.moveaxis(batch_q, 0, 1).astype(np.float32, copy=False))
 
                 if idx % 10 == 0:
                     sys.stdout.write(f"\r    Processed {end}/{total_items} items...")
                     sys.stdout.flush()
         print(f"\r    Processed {total_items}/{total_items} items. Done.")
 
-        flat_preds = np.concatenate(raw_predictions, axis=0)
-
-        if quantile_levels is None:
-            quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        quantile_levels_array = np.asarray(quantile_levels, dtype=float)
-
-        samples = _normalize_samples_array(flat_preds, prediction_length)
-        fc_quantiles = np.quantile(samples, quantile_levels_array, axis=1)
-        fc_quantiles = np.moveaxis(fc_quantiles, 0, 1).astype(np.float32, copy=False)
+        fc_quantiles = np.concatenate(fc_quantiles, axis=0)
 
         ds_config = f"{dataset_name}/{term}"
 
