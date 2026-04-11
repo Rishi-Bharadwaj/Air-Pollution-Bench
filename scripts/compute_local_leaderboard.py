@@ -318,88 +318,115 @@ def extract_pollutant(item_id: str) -> str:
     return item_id.rsplit("_", 1)[-1]
 
 
-def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = None) -> pd.DataFrame:
-    """
-    Load per-series metrics from NPZ files, map to pollutant via item_ids in config.json,
-    and return per-pollutant aggregated metrics.
-
-    Returns:
-        DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"]
-    """
+def _iter_model_series(results_root: Path, dataset_filter: list[str] = None):
+    """Iterate over (model, dataset_id, horizon, item_ids, npz_metrics) tuples."""
     import json
-    rows = []
-    dropped={}
-    MASE_THRESHOLD=100
     for model_dir in results_root.iterdir():
         if not model_dir.is_dir():
             continue
         model_name = model_dir.name
-
         for dataset_dir in model_dir.iterdir():
             if not dataset_dir.is_dir():
                 continue
             dataset_name = dataset_dir.name
-
             for freq_dir in dataset_dir.iterdir():
                 if not freq_dir.is_dir():
                     continue
                 freq_name = freq_dir.name
                 dataset_id = f"{dataset_name}/{freq_name}"
-
                 if dataset_filter and dataset_id not in dataset_filter:
                     continue
-
                 for horizon in ["short", "medium", "long"]:
                     horizon_dir = results_root / model_name / dataset_id / horizon
                     metrics_path = horizon_dir / "metrics.npz"
                     config_path = horizon_dir / "config.json"
-
                     if not metrics_path.exists() or not config_path.exists():
                         continue
-
                     with open(config_path) as f:
                         config = json.load(f)
-
                     item_ids = config.get("item_ids")
                     if not item_ids:
                         continue
-
                     npz_metrics = np.load(metrics_path)
-                    # metrics shape: (num_series, num_windows, num_variates)
-                    # Pre-compute per-series means vectorized (over all dims except series)
-                    n_series = len(item_ids)
-                    batch = {
-                        "model": [model_name] * n_series,
-                        "dataset_id": [dataset_id] * n_series,
-                        "horizon": [horizon] * n_series,
-                        "pollutant": [extract_pollutant(iid) for iid in item_ids],
-                    }
-                    for metric_name in ["MASE", "CRPS", "MAE", "RMSE"]:
-                        arr = npz_metrics.get(metric_name)
-                        if arr is not None and arr.shape[0] == n_series:
-                            # Collapse all dims except series dim 0
-                            reduce_axes = tuple(range(1, arr.ndim))
-                            per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
-                            # if metric_name == "MASE":
-                            #     nan_pre_mask = np.isnan(per_series)
-                            #     over_threshold_mask = ~nan_pre_mask & (per_series > MASE_THRESHOLD)
-                            #     per_series = np.where(over_threshold_mask, np.nan, per_series)
-                            #     if over_threshold_mask.any():
-                            #         from collections import Counter
-                            #         dropped[(model_name, dataset_id, horizon)] = dict(Counter(
-                            #             batch["pollutant"][i]
-                            #             for i in np.where(over_threshold_mask)[0]
-                            #         ))
-                            batch[metric_name] = per_series.tolist()
-                        else:
-                            batch[metric_name] = [np.nan] * n_series
-                    rows.append(pd.DataFrame(batch))
+                    yield model_name, dataset_id, horizon, item_ids, npz_metrics
+
+
+def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = None) -> pd.DataFrame:
+    """
+    Load per-series metrics from NPZ files, map to pollutant via item_ids in config.json,
+    and return per-pollutant aggregated metrics.
+
+    Sites where MASE > threshold for ANY model are excluded from ALL models
+    to ensure a fair comparison.
+
+    Returns:
+        DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"]
+    """
+    MASE_THRESHOLD = 50
+
+    # --- Pass 1: collect per-site MASE across all models, then exclude by mean ---
+    # Key: (dataset_id, horizon, item_id) -> list of MASE values across models
+    site_mase_values: dict[tuple[str, str, str], list[float]] = {}
+
+    for model_name, dataset_id, horizon, item_ids, npz_metrics in _iter_model_series(results_root, dataset_filter):
+        n_series = len(item_ids)
+        arr = npz_metrics.get("MASE")
+        if arr is None or arr.shape[0] != n_series:
+            continue
+        reduce_axes = tuple(range(1, arr.ndim))
+        per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
+        for i, iid in enumerate(item_ids):
+            val = per_series[i]
+            if not np.isnan(val):
+                site_mase_values.setdefault((dataset_id, horizon, iid), []).append(float(val))
+
+    # Exclude sites where mean MASE across models > threshold
+    excluded_sites: dict[tuple[str, str], set[str]] = {}
+    for (dataset_id, horizon, iid), values in site_mase_values.items():
+        if np.mean(values) > MASE_THRESHOLD:
+            excluded_sites.setdefault((dataset_id, horizon), set()).add(iid)
+
+    # Log excluded sites with pollutant info
+    if excluded_sites:
+        print(f"\n  MASE threshold ({MASE_THRESHOLD}) exclusions (applied to ALL models):")
+        for (ds, hz), ids in sorted(excluded_sites.items()):
+            pollutant_counts: dict[str, int] = {}
+            for iid in ids:
+                pol = extract_pollutant(iid)
+                pollutant_counts[pol] = pollutant_counts.get(pol, 0) + 1
+            breakdown = ", ".join(f"{pol}: {n}" for pol, n in sorted(pollutant_counts.items()))
+            print(f"    {ds}/{hz}: {len(ids)} site(s) excluded ({breakdown})")
+
+    # --- Pass 2: load all metrics, masking excluded sites by item_id ---
+    rows = []
+    for model_name, dataset_id, horizon, item_ids, npz_metrics in _iter_model_series(results_root, dataset_filter):
+        n_series = len(item_ids)
+        key = (dataset_id, horizon)
+        exclude_ids = excluded_sites.get(key, set())
+
+        batch = {
+            "model": [model_name] * n_series,
+            "dataset_id": [dataset_id] * n_series,
+            "horizon": [horizon] * n_series,
+            "pollutant": [extract_pollutant(iid) for iid in item_ids],
+        }
+        for metric_name in ["MASE", "CRPS", "MAE", "RMSE"]:
+            arr = npz_metrics.get(metric_name)
+            if arr is not None and arr.shape[0] == n_series:
+                reduce_axes = tuple(range(1, arr.ndim))
+                per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
+                # Mask excluded sites across all metrics
+                for i, iid in enumerate(item_ids):
+                    if iid in exclude_ids:
+                        per_series[i] = np.nan
+                batch[metric_name] = per_series.tolist()
+            else:
+                batch[metric_name] = [np.nan] * n_series
+        rows.append(pd.DataFrame(batch))
 
     if not rows:
         return pd.DataFrame(columns=["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"])
 
-    if dropped:
-        print(dropped)
     # Aggregate per (model, dataset_id, horizon, pollutant)
     df = pd.concat(rows, ignore_index=True)
     return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[

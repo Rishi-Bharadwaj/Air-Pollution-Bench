@@ -183,36 +183,6 @@ def run_auto_ets_experiment(
         ]
         fc_df = fc_df.sort_values(["unique_id", "ds"])
         
-        # hi_col = "AutoETS-hi-80"
-        # lo_col = "AutoETS-lo-80"
-        # interval_width = fc_df[hi_col] - fc_df[lo_col]
-        # print(f"Interval width: max={interval_width.max():.2f}, mean={interval_width.mean():.2f}, p99={interval_width.quantile(0.99):.2f}")
-        # print(f"NaN count: {fc_df[q_cols].isna().sum().sum()}")
-        # print(f"Inf count: {np.isinf(fc_df[q_cols].to_numpy()).sum()}")
-        # NaN-quantile fallback (disabled): downstream metric aggregation uses
-        # np.nanmean, so NaN windows are skipped rather than poisoning averages.
-        # Re-enable if you'd rather rescue those windows with an additive-only
-        # ETS (ZNA) refit instead of dropping them from the aggregate.
-        # nan_uids = fc_df.loc[fc_df[q_cols].isna().any(axis=1), "unique_id"].unique()
-        # if len(nan_uids) > 0:
-        #     print(f"  {len(nan_uids)} window(s) had NaN quantiles; refitting with additive ETS fallback...")
-        #     fallback_df = long_df[long_df["unique_id"].isin(nan_uids)]
-        #     sf_fb = StatsForecast(
-        #         models=[AutoETS(season_length=season_length, model="ZNA")],
-        #         freq=dataset.freq,
-        #         n_jobs=n_jobs,
-        #         verbose=False,
-        #     )
-        #     fb_fc = sf_fb.forecast(
-        #         df=fallback_df,
-        #         h=dataset.prediction_length,
-        #         level=[20, 40, 60, 80],
-        #     ).sort_values(["unique_id", "ds"])
-        #     fc_df = fc_df.set_index(["unique_id", "ds"])
-        #     fb_fc = fb_fc.set_index(["unique_id", "ds"])
-        #     fc_df.loc[fb_fc.index, q_cols] = fb_fc[q_cols]
-        #     fc_df = fc_df.reset_index()
-
         arr = fc_df[q_cols].to_numpy()  # (num_instances * h, num_quantiles)
         num_instances = len(inputs)
         h = dataset.prediction_length
