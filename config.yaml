@@ -108,7 +108,7 @@ models:
   #     - statsforecast
   #   args:
   #     context_length: 168
-  #     n_jobs: 24
+  #     n_jobs: 16
 
   # auto_arima:
   #   script: experiments/auto_arima.py
@@ -129,21 +129,18 @@ models:
   # deepar:
   #   script: experiments/deepar.py
   #   packages:
-  #     - gluonts~=0.15.1
-  #     - lightning>=2.5.0
-  #     - torch
-  #     - huggingface-hub==0.30.0
+  #     - autogluon.timeseries
   #   args:
-  #     context_length: 168      # 2 weeks of hourly context
+  #     context_length: 168
   #     max_epochs: 100
-  #     num_batches_per_epoch: 100 # 10k training steps per pollutant
-  #     batch_size: 1024          # 5090 has 32 GB — plenty of headroom
-  #     num_samples: 100          # smoother quantile estimates
-  #     hidden_size: 256           # was 40; 5090 eats this for breakfast
-  #     num_layers: 3              # a touch more depth
-  #     dropout_rate: 0.2          # regularize the bigger model
-  #     lr: 0.0005                 # slightly lower for the bigger model
-  #     num_workers: 4             # parallel DataLoader workers feeding the GPU
+  #     num_batches_per_epoch: 100
+  #     batch_size: 1024
+  #     num_parallel_samples: 100
+  #     hidden_size: 256
+  #     num_layers: 3
+  #     dropout_rate: 0.2
+  #     lr: 0.0005
+  #     early_stopping_patience: 10
 
   dlinear:
     script: experiments/dlinear.py
@@ -153,45 +150,26 @@ models:
       context_length: 168
       max_epochs: 100
       lr: 0.001
+      pred_chunk: 10000
+      early_stopping_patience: 10
 
-  # xg_boost:
-  #   script: experiments/xg_boost.py
-  #   packages:
-  #     - mlforecast
-  #     - xgboost>=2.0
-  #     - utilsforecast
-  #   args:
-  #     context_length: 168        # 1 week of hourly history per series
-  #     n_estimators: 1000
-  #     max_depth: 8
-  #     learning_rate: 0.05
-  #     subsample: 0.8
-  #     colsample_bytree: 0.8
-  #     min_child_weight: 1.0
-  #     num_threads: 1             # load everything in RAM; no multi-proc features
-  #     device: cuda               # 5090 handles this easily
+
 
   # patchtst:
   #   script: experiments/patchtst.py
   #   packages:
-  #     - neuralforecast
-  #     - lightning>=2.5.0
-  #     - torch
-  #     - utilsforecast
+  #     - autogluon.timeseries
   #   args:
-  #     context_length: 168        # 1 week of hourly history
-  #     encoder_layers: 3
-  #     n_heads: 16
-  #     hidden_size: 128
-  #     linear_hidden_size: 256
-  #     dropout: 0.2
+  #     context_length: 168
+  #     max_epochs: 100
+  #     lr: 0.001
   #     patch_len: 16
   #     stride: 8
-  #     max_steps: 2000            # training steps per pollutant (tune later)
-  #     batch_size: 32             # series-level batch
-  #     windows_batch_size: 1024   # window-level batch fed to the model
-  #     learning_rate: 0.0001
-  #     scaler_type: standard
+  #     d_model: 128
+  #     nhead: 16
+  #     num_encoder_layers: 3
+  #     dropout: 0.2
+  #     early_stopping_patience: 10
       
   # kairos:
   #   script: experiments/kairos_model.py
@@ -223,10 +201,11 @@ datasets:
   - CPCB/H
   # - AURN/H
   # - EPA/H
-  # - CNEMC/H 
+  # # - CNEMC/H 
   # - SINAICA/H
   # - EEA_DE/H
   # - EEA_FR/H
+  # - CNEMC_SMALL/H
 
 # Leaderboard settings
 leaderboard:

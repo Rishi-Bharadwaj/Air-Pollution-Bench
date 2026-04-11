@@ -70,6 +70,7 @@ def run_dlinear_experiment(
     max_epochs: int = 100,
     lr: float = 1e-3,
     pred_chunk: int = 10_000,
+    early_stopping_patience: int = 10,
 ):
     """
     Train one DLinear model per pollutant group and save quantile
@@ -188,11 +189,14 @@ def run_dlinear_experiment(
                     "lr": lr,
                 },
             }
+            if early_stopping_patience > 0:
+                hyperparams["DLinear"]["early_stopping_patience"] = early_stopping_patience
             if context_length is not None:
                 hyperparams["DLinear"]["context_length"] = context_length
 
             t0 = time.perf_counter()
             predictor.fit(train_tsdf, hyperparameters=hyperparams)
+            predictor.persist()
             train_elapsed = time.perf_counter() - t0
             print(f"  [{pollutant}] training done in {train_elapsed:.1f}s")
 
@@ -245,6 +249,7 @@ def run_dlinear_experiment(
             "context_length": effective_context_length,
             "max_epochs": max_epochs,
             "lr": lr,
+            "early_stopping_patience": early_stopping_patience,
             "season_length": season_length,
             "quantile_levels": quantile_levels,
         }
@@ -281,6 +286,8 @@ def main():
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
     parser.add_argument("--max-epochs", type=int, default=100, help="Max training epochs")
+    parser.add_argument("--early-stopping-patience", type=int, default=10,
+                        help="Epochs without val loss improvement before stopping (0 to disable)")
     parser.add_argument("--pred-chunk", type=int, default=10000, help="Prediction chunk size (windows per batch)")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--quantiles", type=float, nargs="+",
@@ -317,6 +324,7 @@ def main():
                 max_epochs=args.max_epochs,
                 lr=args.lr,
                 pred_chunk=args.pred_chunk,
+                early_stopping_patience=args.early_stopping_patience,
             )
         except Exception as e:
             print(f"ERROR: Failed to run experiment for {dataset_name}: {e}")
