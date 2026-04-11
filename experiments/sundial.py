@@ -46,7 +46,7 @@ def _prepare_context(series, target_length):
         series_t = torch.tensor(series, dtype=torch.float32)
 
     if series_t.shape[-1] >= target_length:
-        return series_t[..., -target_length:]
+        return series_t[..., -target_length:].clone()
 
     pad_len = target_length - series_t.shape[-1]
     pad = torch.zeros((*series_t.shape[:-1], pad_len), dtype=series_t.dtype)
