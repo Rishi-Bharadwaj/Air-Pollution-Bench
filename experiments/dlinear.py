@@ -69,6 +69,7 @@ def run_dlinear_experiment(
     quantile_levels: list[float] | None = None,
     max_epochs: int = 100,
     lr: float = 1e-3,
+    pred_chunk: int = 10_000,
 ):
     """
     Train one DLinear model per pollutant group and save quantile
@@ -207,14 +208,13 @@ def run_dlinear_experiment(
                     dest_flat_indices.append(base + w)
 
             num_total = len(group_test_inputs)
-            PRED_CHUNK = 10_000
-            print(f"    [{pollutant}] Predicting {num_total} test windows (chunks of {PRED_CHUNK})...")
+            print(f"    [{pollutant}] Predicting {num_total} test windows (chunks of {pred_chunk})...")
 
             q_cols = [str(q) for q in quantile_levels]
 
-            num_chunks = (num_total + PRED_CHUNK - 1) // PRED_CHUNK
-            for chunk_start in tqdm(range(0, num_total, PRED_CHUNK), total=num_chunks, desc=f"    {pollutant} predict"):
-                chunk_end = min(chunk_start + PRED_CHUNK, num_total)
+            num_chunks = (num_total + pred_chunk - 1) // pred_chunk
+            for chunk_start in tqdm(range(0, num_total, pred_chunk), total=num_chunks, desc=f"    {pollutant} predict"):
+                chunk_end = min(chunk_start + pred_chunk, num_total)
                 chunk_inputs = group_test_inputs[chunk_start:chunk_end]
                 chunk_dest = dest_flat_indices[chunk_start:chunk_end]
 
@@ -281,6 +281,7 @@ def main():
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
     parser.add_argument("--max-epochs", type=int, default=100, help="Max training epochs")
+    parser.add_argument("--pred-chunk", type=int, default=10000, help="Prediction chunk size (windows per batch)")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--quantiles", type=float, nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
@@ -315,6 +316,7 @@ def main():
                 quantile_levels=args.quantiles,
                 max_epochs=args.max_epochs,
                 lr=args.lr,
+                pred_chunk=args.pred_chunk,
             )
         except Exception as e:
             print(f"ERROR: Failed to run experiment for {dataset_name}: {e}")

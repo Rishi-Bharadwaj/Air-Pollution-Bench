@@ -74,9 +74,8 @@ models:
   #     - transformers==4.40.1
   #   args:
   #     context_length: 168
-  #     batch_size: 1024
+  #     batch_size: 256
       
-
   # tirex:
   #   script: experiments/tirex_model.py
   #   packages:
@@ -125,7 +124,7 @@ models:
   #     - statsforecast
   #   args:
   #     context_length: 168
-  #     n_jobs: 24
+  #     n_jobs: 16
 
   # deepar:
   #   script: experiments/deepar.py
@@ -146,22 +145,31 @@ models:
   #     lr: 0.0005                 # slightly lower for the bigger model
   #     num_workers: 4             # parallel DataLoader workers feeding the GPU
 
-  xg_boost:
-    script: experiments/xg_boost.py
+  dlinear:
+    script: experiments/dlinear.py
     packages:
-      - mlforecast
-      - xgboost>=2.0
-      - utilsforecast
+      - autogluon.timeseries
     args:
-      context_length: 168        # 1 week of hourly history per series
-      n_estimators: 1000
-      max_depth: 8
-      learning_rate: 0.05
-      subsample: 0.8
-      colsample_bytree: 0.8
-      min_child_weight: 1.0
-      num_threads: 1             # load everything in RAM; no multi-proc features
-      device: cuda               # 5090 handles this easily
+      context_length: 168
+      max_epochs: 100
+      lr: 0.001
+
+  # xg_boost:
+  #   script: experiments/xg_boost.py
+  #   packages:
+  #     - mlforecast
+  #     - xgboost>=2.0
+  #     - utilsforecast
+  #   args:
+  #     context_length: 168        # 1 week of hourly history per series
+  #     n_estimators: 1000
+  #     max_depth: 8
+  #     learning_rate: 0.05
+  #     subsample: 0.8
+  #     colsample_bytree: 0.8
+  #     min_child_weight: 1.0
+  #     num_threads: 1             # load everything in RAM; no multi-proc features
+  #     device: cuda               # 5090 handles this easily
 
   # patchtst:
   #   script: experiments/patchtst.py
@@ -225,8 +233,10 @@ leaderboard:
   results_dir: output/results
   datasets:             # leave empty or omit to use all datasets in results_dir
     - CPCB/H
-    # - SINAICA/H
-    # - EEA_DE/H
-    # - EEA_FR/H
+    - SINAICA/H
+    - EEA_DE/H
+    - EEA_FR/H
+    - AURN/H
+    - EPA/H
   metric: MASE          # sort by this metric
   air_pollution: true   # per-pollutant leaderboard instead of original overall leaderboard
