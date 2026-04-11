@@ -496,6 +496,117 @@ def get_pollutant_balanced_leaderboard(
     return leaderboard
 
 
+def check_result_consistency(results_root: Path, dataset_filter: list[str] = None) -> bool:
+    """
+    Check that all models and datasets have the same number of results per item_id/series.
+
+    For each (dataset_id, horizon), verifies:
+      - All models have the same set of item_ids (in the same order).
+      - All models have the same NPZ array shape per metric (same windows/variates per series).
+
+    Prints warnings for any inconsistencies found.
+
+    Returns:
+        True if all checks pass, False if any inconsistencies are found.
+    """
+    import json
+
+    # Collect: (dataset_id, horizon) -> {model: {"item_ids": [...], "shapes": {metric: shape}}}
+    registry: dict[tuple[str, str], dict[str, dict]] = {}
+
+    for model_dir in results_root.iterdir():
+        if not model_dir.is_dir():
+            continue
+        model_name = model_dir.name
+        for dataset_dir in model_dir.iterdir():
+            if not dataset_dir.is_dir():
+                continue
+            dataset_name = dataset_dir.name
+            for freq_dir in dataset_dir.iterdir():
+                if not freq_dir.is_dir():
+                    continue
+                freq_name = freq_dir.name
+                dataset_id = f"{dataset_name}/{freq_name}"
+                if dataset_filter and dataset_id not in dataset_filter:
+                    continue
+                for horizon in ["short", "medium", "long"]:
+                    horizon_dir = results_root / model_name / dataset_id / horizon
+                    metrics_path = horizon_dir / "metrics.npz"
+                    config_path = horizon_dir / "config.json"
+                    if not metrics_path.exists():
+                        continue
+                    item_ids = None
+                    if config_path.exists():
+                        with open(config_path) as f:
+                            cfg = json.load(f)
+                        item_ids = cfg.get("item_ids")
+                    npz = np.load(metrics_path)
+                    shapes = {k: npz[k].shape for k in npz.files}
+                    key = (dataset_id, horizon)
+                    registry.setdefault(key, {})[model_name] = {
+                        "item_ids": item_ids,
+                        "shapes": shapes,
+                    }
+
+    if not registry:
+        print("⚠️  Consistency check: no results found to check.")
+        return True
+
+    all_ok = True
+    for (dataset_id, horizon), model_data in sorted(registry.items()):
+        models = sorted(model_data.keys())
+        if len(models) < 2:
+            continue
+
+        # --- Check item_ids consistency ---
+        ref_model = models[0]
+        ref_item_ids = model_data[ref_model]["item_ids"]
+        for m in models[1:]:
+            m_item_ids = model_data[m]["item_ids"]
+            if ref_item_ids is None and m_item_ids is None:
+                continue
+            if ref_item_ids != m_item_ids:
+                all_ok = False
+                if ref_item_ids is None or m_item_ids is None:
+                    print(
+                        f"⚠️  Consistency [{dataset_id}/{horizon}]: "
+                        f"'{ref_model}' has item_ids={ref_item_ids is not None}, "
+                        f"'{m}' has item_ids={m_item_ids is not None}"
+                    )
+                else:
+                    ref_set = set(ref_item_ids)
+                    m_set = set(m_item_ids)
+                    only_ref = ref_set - m_set
+                    only_m = m_set - ref_set
+                    print(
+                        f"⚠️  Consistency [{dataset_id}/{horizon}]: item_ids differ between "
+                        f"'{ref_model}' and '{m}'"
+                        + (f" — only in '{ref_model}': {sorted(only_ref)}" if only_ref else "")
+                        + (f" — only in '{m}': {sorted(only_m)}" if only_m else "")
+                        + (f" — same items but different order" if not only_ref and not only_m else "")
+                    )
+
+        # --- Check array shapes consistency ---
+        ref_shapes = model_data[ref_model]["shapes"]
+        for m in models[1:]:
+            m_shapes = model_data[m]["shapes"]
+            for metric in set(ref_shapes) | set(m_shapes):
+                ref_shape = ref_shapes.get(metric)
+                m_shape = m_shapes.get(metric)
+                if ref_shape != m_shape:
+                    all_ok = False
+                    print(
+                        f"⚠️  Consistency [{dataset_id}/{horizon}] metric={metric}: "
+                        f"'{ref_model}' shape={ref_shape}, '{m}' shape={m_shape}"
+                    )
+
+    if all_ok:
+        print("✅ Consistency check passed: all models have matching item_ids and result shapes.")
+    else:
+        print("❌ Consistency check FAILED: see warnings above.")
+    return all_ok
+
+
 def filter_by_datasets(df: pd.DataFrame, dataset_ids: list[str]) -> pd.DataFrame:
     """Filter results DataFrame to only include specified dataset_ids."""
     if not dataset_ids:
@@ -560,6 +671,10 @@ def main():
         sys.exit(1)
 
     print(f"✅ Loaded {len(all_results)} results")
+
+    # Consistency check: all models must have the same item_ids and result shapes
+    print(f"\nStep 1b: Checking result consistency across models and datasets...")
+    check_result_consistency(results_root, dataset_filter)
 
     # Filter to requested datasets
     if dataset_filter:
