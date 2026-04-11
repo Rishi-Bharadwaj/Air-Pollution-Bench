@@ -141,9 +141,12 @@ def run_patchtst_experiment(
 
         effective_context_length = context_length if context_length is not None else h
 
-        # Materialize training entries and test inputs
+        # Materialize training entries and test inputs (truncate test context eagerly)
         training_entries = list(dataset.training_dataset)
-        test_inputs = list(eval_data.input)
+        test_inputs = [
+            {**e, "target": np.asarray(e["target"])[-effective_context_length:]}
+            for e in eval_data.input
+        ]
         num_series_exp = len(training_entries)
 
         expected_instances = num_series_exp * num_windows
@@ -233,7 +236,7 @@ def run_patchtst_experiment(
                 chunk_inputs = group_test_inputs[chunk_start:chunk_end]
                 chunk_dest = dest_flat_indices[chunk_start:chunk_end]
 
-                pred_df = _entries_to_ag_df(chunk_inputs, dataset.freq)
+                pred_df = _entries_to_ag_df(chunk_inputs, dataset.freq)  # already truncated
                 pred_tsdf = TimeSeriesDataFrame.from_data_frame(
                     pred_df, id_column="item_id", timestamp_column="timestamp",
                 )
@@ -241,10 +244,12 @@ def run_patchtst_experiment(
 
                 # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
                 # with columns "mean", "0.1", "0.2", ..., "0.9"
-                for local_idx, dest_idx in enumerate(chunk_dest):
-                    item_preds = predictions.loc[str(local_idx)]  # h rows
-                    q_arr = item_preds[q_cols].to_numpy().T  # (num_q, h)
-                    fc_quantiles[dest_idx] = q_arr
+                pred_reset = predictions[q_cols].reset_index()
+                pred_reset["_order"] = pred_reset["item_id"].astype(int)
+                pred_reset = pred_reset.sort_values(["_order", "timestamp"])
+                pred_vals = pred_reset[q_cols].to_numpy()  # (chunk_size * h, num_q)
+                pred_vals = pred_vals.reshape(len(chunk_dest), h, num_q)
+                fc_quantiles[chunk_dest] = pred_vals.transpose(0, 2, 1)  # (chunk_size, num_q, h)
 
                 del pred_df, pred_tsdf, predictions
 

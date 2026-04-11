@@ -219,7 +219,10 @@ def run_dlinear_experiment(
             num_chunks = (num_total + pred_chunk - 1) // pred_chunk
             for chunk_start in tqdm(range(0, num_total, pred_chunk), total=num_chunks, desc=f"    {pollutant} predict"):
                 chunk_end = min(chunk_start + pred_chunk, num_total)
-                chunk_inputs = group_test_inputs[chunk_start:chunk_end]
+                chunk_inputs = [
+                    {**e, "target": np.asarray(e["target"])[-effective_context_length:]}
+                    for e in group_test_inputs[chunk_start:chunk_end]
+                ]
                 chunk_dest = dest_flat_indices[chunk_start:chunk_end]
 
                 pred_df = _entries_to_ag_df(chunk_inputs, dataset.freq)
@@ -230,10 +233,12 @@ def run_dlinear_experiment(
 
                 # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
                 # with columns "mean", "0.1", "0.2", ..., "0.9"
-                for local_idx, dest_idx in enumerate(chunk_dest):
-                    item_preds = predictions.loc[str(local_idx)]  # h rows
-                    q_arr = item_preds[q_cols].to_numpy().T  # (num_q, h)
-                    fc_quantiles[dest_idx] = q_arr
+                pred_reset = predictions[q_cols].reset_index()
+                pred_reset["_order"] = pred_reset["item_id"].astype(int)
+                pred_reset = pred_reset.sort_values(["_order", "timestamp"])
+                pred_vals = pred_reset[q_cols].to_numpy()  # (chunk_size * h, num_q)
+                pred_vals = pred_vals.reshape(len(chunk_dest), h, num_q)
+                fc_quantiles[chunk_dest] = pred_vals.transpose(0, 2, 1)  # (chunk_size, num_q, h)
 
                 del pred_df, pred_tsdf, predictions
 
