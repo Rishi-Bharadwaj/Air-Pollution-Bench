@@ -414,7 +414,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
             arr = npz_metrics.get(metric_name)
             if arr is not None and arr.shape[0] == n_series:
                 reduce_axes = tuple(range(1, arr.ndim))
-                per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
+                per_series = np.nanmean(arr[:n_series], axis=reduce_axes).copy() if reduce_axes else arr[:n_series]
                 # Mask excluded sites across all metrics
                 for i, iid in enumerate(item_ids):
                     if iid in exclude_ids:
@@ -431,7 +431,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     df = pd.concat(rows, ignore_index=True)
     return df.groupby(["model", "dataset_id", "horizon", "pollutant"], as_index=False)[
         ["MASE", "CRPS", "MAE", "RMSE"]
-    ].median()
+    ].mean()
 
 
 def get_pollutant_balanced_leaderboard(
