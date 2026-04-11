@@ -56,7 +56,7 @@ def _prepare_context(series, target_length, pad_value=float('nan')):
         padding_size = target_length - current_length
         return torch.nn.functional.pad(series_t, (padding_size, 0), mode='constant', value=pad_value)
     else:
-        return series_t[..., -target_length:]
+        return series_t[..., -target_length:].clone()
 
 
 def run_kairos_experiment(
