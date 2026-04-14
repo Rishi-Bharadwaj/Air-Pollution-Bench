@@ -90,7 +90,7 @@ datasets:
     short:
       prediction_length: 24  # 1 week
 
-  CNEMC_SMALL:
+  CNEMC_SMALL/H:
     test_length: 17376
     val_length: 0
     short:

@@ -31,7 +31,6 @@ import pandas as pd
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from dotenv import load_dotenv
 from gluonts.time_feature import get_seasonality
-from tqdm.auto import tqdm
 
 from timebench.evaluation import save_window_predictions
 from timebench.evaluation.data import (
@@ -67,15 +66,7 @@ def run_deepar_experiment(
     context_length: int | None = None,
     config_path: Path | None = None,
     quantile_levels: list[float] | None = None,
-    num_layers: int = 2,
-    hidden_size: int = 40,
-    dropout_rate: float = 0.1,
     max_epochs: int = 50,
-    num_batches_per_epoch: int = 50,
-    batch_size: int = 32,
-    num_parallel_samples: int = 100,
-    lr: float = 1e-3,
-    pred_chunk: int = 10_000,
     early_stopping_patience: int = 10,
 ):
     """
@@ -190,14 +181,7 @@ def run_deepar_experiment(
             )
             hyperparams = {
                 "DeepAR": {
-                    "num_layers": num_layers,
-                    "hidden_size": hidden_size,
-                    "dropout_rate": dropout_rate,
                     "max_epochs": max_epochs,
-                    "num_batches_per_epoch": num_batches_per_epoch,
-                    "batch_size": batch_size,
-                    "num_parallel_samples": num_parallel_samples,
-                    "lr": lr,
                 },
             }
             if early_stopping_patience > 0:
@@ -213,7 +197,7 @@ def run_deepar_experiment(
 
             del train_df, train_tsdf, train_group
 
-            # --- Predict per test window (chunked to limit memory) ---
+            # --- Predict all test windows for this pollutant ---
             group_test_inputs = []
             dest_flat_indices = []
             for s_idx in series_indices:
@@ -223,30 +207,26 @@ def run_deepar_experiment(
                     dest_flat_indices.append(base + w)
 
             num_total = len(group_test_inputs)
-            print(f"    [{pollutant}] Predicting {num_total} test windows (chunks of {pred_chunk})...")
+            print(f"    [{pollutant}] Predicting {num_total} test windows...")
 
             q_cols = [str(q) for q in quantile_levels]
 
-            num_chunks = (num_total + pred_chunk - 1) // pred_chunk
-            for chunk_start in tqdm(range(0, num_total, pred_chunk), total=num_chunks, desc=f"    {pollutant} predict"):
-                chunk_end = min(chunk_start + pred_chunk, num_total)
-                chunk_inputs = group_test_inputs[chunk_start:chunk_end]
-                chunk_dest = dest_flat_indices[chunk_start:chunk_end]
+            pred_df = _entries_to_ag_df(group_test_inputs, dataset.freq)
+            pred_tsdf = TimeSeriesDataFrame.from_data_frame(
+                pred_df, id_column="item_id", timestamp_column="timestamp",
+            )
+            predictions = predictor.predict(pred_tsdf)
 
-                pred_df = _entries_to_ag_df(chunk_inputs, dataset.freq)
-                pred_tsdf = TimeSeriesDataFrame.from_data_frame(
-                    pred_df, id_column="item_id", timestamp_column="timestamp",
-                )
-                predictions = predictor.predict(pred_tsdf)
+            # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
+            # with columns "mean", "0.1", "0.2", ..., "0.9"
+            pred_reset = predictions[q_cols].reset_index()
+            pred_reset["_order"] = pred_reset["item_id"].astype(int)
+            pred_reset = pred_reset.sort_values(["_order", "timestamp"])
+            pred_vals = pred_reset[q_cols].to_numpy()  # (num_total * h, num_q)
+            pred_vals = pred_vals.reshape(num_total, h, num_q)
+            fc_quantiles[dest_flat_indices] = pred_vals.transpose(0, 2, 1)  # (num_total, num_q, h)
 
-                # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
-                # with columns "mean", "0.1", "0.2", ..., "0.9"
-                for local_idx, dest_idx in enumerate(chunk_dest):
-                    item_preds = predictions.loc[str(local_idx)]  # h rows
-                    q_arr = item_preds[q_cols].to_numpy().T  # (num_q, h)
-                    fc_quantiles[dest_idx] = q_arr
-
-                del pred_df, pred_tsdf, predictions
+            del pred_df, pred_tsdf, predictions
 
             del predictor
             gc.collect()
@@ -258,14 +238,7 @@ def run_deepar_experiment(
         model_hyperparams = {
             "model": "DeepAR",
             "context_length": effective_context_length,
-            "num_layers": num_layers,
-            "hidden_size": hidden_size,
-            "dropout_rate": dropout_rate,
             "max_epochs": max_epochs,
-            "num_batches_per_epoch": num_batches_per_epoch,
-            "batch_size": batch_size,
-            "num_parallel_samples": num_parallel_samples,
-            "lr": lr,
             "early_stopping_patience": early_stopping_patience,
             "season_length": season_length,
             "quantile_levels": quantile_levels,
@@ -302,20 +275,9 @@ def main():
                         help="Context length fed to DeepAR. Defaults to prediction_length.")
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
-    parser.add_argument("--num-layers", type=int, default=2, help="Number of RNN layers")
-    parser.add_argument("--hidden-size", type=int, default=40, help="RNN hidden size")
-    parser.add_argument("--dropout-rate", type=float, default=0.1, help="Dropout rate")
     parser.add_argument("--max-epochs", type=int, default=50, help="Max training epochs")
     parser.add_argument("--early-stopping-patience", type=int, default=10,
                         help="Epochs without val loss improvement before stopping (0 to disable)")
-    parser.add_argument("--num-batches-per-epoch", type=int, default=50,
-                        help="Training batches per epoch")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
-    parser.add_argument("--num-parallel-samples", type=int, default=100,
-                        help="Sample paths drawn at prediction time")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--pred-chunk", type=int, default=10000,
-                        help="Prediction chunk size (windows per batch)")
     parser.add_argument("--quantiles", type=float, nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
                         help="Quantile levels to save")
@@ -347,15 +309,7 @@ def main():
                 context_length=args.context_length,
                 config_path=config_path,
                 quantile_levels=args.quantiles,
-                num_layers=args.num_layers,
-                hidden_size=args.hidden_size,
-                dropout_rate=args.dropout_rate,
                 max_epochs=args.max_epochs,
-                num_batches_per_epoch=args.num_batches_per_epoch,
-                batch_size=args.batch_size,
-                num_parallel_samples=args.num_parallel_samples,
-                lr=args.lr,
-                pred_chunk=args.pred_chunk,
                 early_stopping_patience=args.early_stopping_patience,
             )
         except Exception as e:

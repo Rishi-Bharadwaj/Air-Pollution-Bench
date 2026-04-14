@@ -26,7 +26,7 @@ models:
   #   script: experiments/moirai.py
   #   packages:
   #     - uni2ts
-  #     - huggingface-hub==0.30.0
+  #     - huggingface-hub==0.34.0
   #   args:
   #     context_length: 168
   #     batch_size: 1024
@@ -35,7 +35,7 @@ models:
   #   script: experiments/moirai2.py
   #   packages:
   #     - uni2ts
-  #     - huggingface-hub==0.30.0
+  #     - huggingface-hub==0.34.0
   #   args:
   #     model_size: small   # only size currently released for moirai-2.0
   #     context_length: 168
@@ -74,7 +74,7 @@ models:
   #     - transformers==4.40.1
   #   args:
   #     context_length: 168
-  #     batch_size: 256
+  #     batch_size: 1024
       
   # tirex:
   #   script: experiments/tirex_model.py
@@ -94,21 +94,21 @@ models:
   #     samples_per_batch: 100
   #     num_samples: 100
 
-  # visionts:
-  #   script: experiments/visiontspp.py
-  #   packages:
-  #     - visionts
-  #   args:
-  #     context_length: 168
-  #     batch_size: 1024
+  visionts:
+    script: experiments/visiontspp.py
+    packages:
+      - visionts
+    args:
+      context_length: 168
+      batch_size: 1024
 
-  # seasonal_naive:
-  #   script: experiments/seasonal_naive.py
-  #   packages:
-  #     - statsforecast
-  #   args:
-  #     context_length: 168
-  #     n_jobs: 16
+  seasonal_naive:
+    script: experiments/seasonal_naive.py
+    packages:
+      - statsforecast
+    args:
+      context_length: 168
+      n_jobs: 16
 
   # auto_arima:
   #   script: experiments/auto_arima.py
@@ -133,25 +133,16 @@ models:
   #   args:
   #     context_length: 168
   #     max_epochs: 100
-  #     num_batches_per_epoch: 100
-  #     batch_size: 1024
-  #     num_parallel_samples: 100
-  #     hidden_size: 256
-  #     num_layers: 3
-  #     dropout_rate: 0.2
-  #     lr: 0.0005
   #     early_stopping_patience: 10
 
-  dlinear:
-    script: experiments/dlinear.py
-    packages:
-      - autogluon.timeseries
-    args:
-      context_length: 168
-      max_epochs: 100
-      lr: 0.001
-      pred_chunk: 10000
-      early_stopping_patience: 10
+  # dlinear:
+  #   script: experiments/dlinear.py
+  #   packages:
+  #     - autogluon.timeseries
+  #   args:
+  #     context_length: 168
+  #     max_epochs: 100
+  #     early_stopping_patience: 10
 
 
 
@@ -162,13 +153,6 @@ models:
   #   args:
   #     context_length: 168
   #     max_epochs: 100
-  #     lr: 0.001
-  #     patch_len: 16
-  #     stride: 8
-  #     d_model: 128
-  #     nhead: 16
-  #     num_encoder_layers: 3
-  #     dropout: 0.2
   #     early_stopping_patience: 10
       
   # kairos:
@@ -179,33 +163,24 @@ models:
   #   packages:
   #     - python-dotenv
   #     - pyarrow
-  #     - huggingface-hub==0.30.0
+  #     - huggingface-hub==0.34.0
   #     - transformers>=4.43
   #   args:
   #     context_length: 168
   #     batch_size: 1024
 
-  # ttm:
-  #   script: experiments/ttm.py
-  #   packages:
-  #     - granite-tsfm[notebooks]
-  #     - torch
-  #   args:
-  #     model_path: ibm-granite/granite-timeseries-ttm-r2
-  #     batch_size: 64
-  #     context_length: 512
 
     
 # Default datasets to run when no dataset= override is given
 datasets:
-  - CPCB/H
+  # - CPCB/H
   # - AURN/H
   # - EPA/H
   # # - CNEMC/H 
   # - SINAICA/H
   # - EEA_DE/H
   # - EEA_FR/H
-  # - CNEMC_SMALL/H
+  - CNEMC_SMALL/H
 
 # Leaderboard settings
 leaderboard:
@@ -217,5 +192,6 @@ leaderboard:
     - EEA_FR/H
     - AURN/H
     - EPA/H
+    - CNEMC_SMALL/H
   metric: MASE          # sort by this metric
   air_pollution: true   # per-pollutant leaderboard instead of original overall leaderboard

@@ -318,6 +318,108 @@ def extract_pollutant(item_id: str) -> str:
     return item_id.rsplit("_", 1)[-1]
 
 
+_DATASET_NAME_MAP = {
+    "CNEMC": "CNEMC SMALL",
+}
+
+
+def display_dataset(dataset_id: str) -> str:
+    """Return a human-readable dataset name, stripping frequency suffix and mapping aliases.
+
+    E.g. 'CPCB/H' -> 'CPCB', 'CNEMC/H' -> 'CNEMC SMALL', 'MY_DS/D' -> 'MY DS'
+    """
+    name = dataset_id.split("/")[0]
+    name = _DATASET_NAME_MAP.get(name, name)
+    return name.replace("_", " ")
+
+
+def to_latex_table(
+    df: pd.DataFrame,
+    caption: str,
+    table_num: int,
+    metric_cols: list = None,
+    lower_is_better: bool = True,
+) -> str:
+    """
+    Convert a DataFrame to a LaTeX table snippet (suitable for \\input{}).
+
+    Formatting per metric column:
+      - Bold:      best value
+      - Underline: second best
+      - Italics:   third best
+
+    Caption is placed above the table in 9pt type, centered if it fits on
+    one line (<= 60 chars), otherwise flush left, with 0.1in spacing before
+    and after. Requires booktabs in the parent document.
+    """
+    df = df.reset_index(drop=True)
+    if metric_cols is None:
+        metric_cols = [c for c in df.columns if c != "model"]
+
+    # Determine rank-based formatting per metric column
+    cell_fmt: dict[tuple[int, str], str] = {}
+    for col in metric_cols:
+        if col not in df.columns:
+            continue
+        vals = pd.to_numeric(df[col], errors="coerce")
+        sorted_idx = vals.sort_values(ascending=lower_is_better).dropna().index.tolist()
+        for rank, idx in enumerate(sorted_idx[:3]):
+            cell_fmt[(idx, col)] = ["bold", "underline", "italic"][rank]
+
+    def _escape(s: str) -> str:
+        # Escape all LaTeX special characters in order (backslash first)
+        s = s.replace("\\", "\\textbackslash{}")
+        s = s.replace("{", "\\{").replace("}", "\\}")
+        s = s.replace("$", "\\$").replace("#", "\\#")
+        s = s.replace("^", "\\textasciicircum{}")
+        s = s.replace("~", "\\textasciitilde{}")
+        s = s.replace("_", "\\_")
+        s = s.replace("%", "\\%").replace("&", "\\&")
+        s = s.replace("<", "\\textless{}").replace(">", "\\textgreater{}")
+        return s
+
+    def _fmt(val, fmt, is_str=False):
+        s = _escape(str(val)) if is_str else str(val)
+        if fmt == "bold":
+            return f"\\textbf{{{s}}}"
+        if fmt == "underline":
+            return f"\\underline{{{s}}}"
+        if fmt == "italic":
+            return f"\\textit{{{s}}}"
+        return s
+
+    cols = df.columns.tolist()
+    col_spec = "l" + "r" * (len(cols) - 1)
+    header = " & ".join(f"\\textbf{{{_escape(c)}}}" for c in cols) + " \\\\"
+
+    body_lines = []
+    for idx, row in df.iterrows():
+        cells = [_fmt(row[c], cell_fmt.get((idx, c)), is_str=(c not in metric_cols)) for c in cols]
+        body_lines.append(" & ".join(cells) + " \\\\")
+
+    caption_align = "centering" if len(caption) <= 60 else "raggedright"
+    caption_tex = (
+        f"{{\\fontsize{{9}}{{11}}\\selectfont\\{caption_align}"
+        f" \\textit{{Table~{table_num}:}} {_escape(caption)}\\par}}"
+    )
+
+    return "\n".join([
+        "\\begin{table}[h]",
+        "\\vspace{0.1in}",
+        caption_tex,
+        "\\vspace{0.1in}",
+        "\\centering",
+        f"\\begin{{tabular}}{{{col_spec}}}",
+        "\\toprule",
+        header,
+        "\\midrule",
+        *body_lines,
+        "\\bottomrule",
+        "\\end{tabular}",
+        "\\end{table}",
+    ])
+
+
 def _iter_model_series(results_root: Path, dataset_filter: list[str] = None):
     """Iterate over (model, dataset_id, horizon, item_ids, npz_metrics) tuples."""
     import json
@@ -362,33 +464,51 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     Returns:
         DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"]
     """
-    MASE_THRESHOLD = 50
+    THRESHOLD = 50
 
-    # --- Pass 1: collect per-site MASE across all models, then exclude by mean ---
-    # Key: (dataset_id, horizon, item_id) -> list of MASE values across models
-    site_mase_values: dict[tuple[str, str, str], list[float]] = {}
+    # --- Pass 1: collect per-site MASE and CRPS across all models, then exclude by mean ---
+    # Key: (dataset_id, horizon, item_id) -> list of values across models
+    site_metric_values: dict[str, dict[tuple[str, str, str], list[float]]] = {"MASE": {}, "CRPS": {}}
 
     for model_name, dataset_id, horizon, item_ids, npz_metrics in _iter_model_series(results_root, dataset_filter):
         n_series = len(item_ids)
-        arr = npz_metrics.get("MASE")
-        if arr is None or arr.shape[0] != n_series:
-            continue
-        reduce_axes = tuple(range(1, arr.ndim))
-        per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
-        for i, iid in enumerate(item_ids):
-            val = per_series[i]
-            if not np.isnan(val):
-                site_mase_values.setdefault((dataset_id, horizon, iid), []).append(float(val))
+        for metric_name in ["MASE", "CRPS"]:
+            arr = npz_metrics.get(metric_name)
+            if arr is None or arr.shape[0] != n_series:
+                continue
+            reduce_axes = tuple(range(1, arr.ndim))
+            per_series = np.nanmean(arr[:n_series], axis=reduce_axes) if reduce_axes else arr[:n_series]
+            for i, iid in enumerate(item_ids):
+                val = per_series[i]
+                if not np.isnan(val):
+                    site_metric_values[metric_name].setdefault((dataset_id, horizon, iid), []).append(float(val))
 
-    # Exclude sites where mean MASE across models > threshold
+    # --- Diagnostic: check which (dataset_id, horizon) configs each model has ---
+    model_configs: dict[str, set[tuple[str, str]]] = {}
+    for model_name, dataset_id, horizon, item_ids, _ in _iter_model_series(results_root, dataset_filter):
+        model_configs.setdefault(model_name, set()).add((dataset_id, horizon))
+
+    all_configs = set().union(*model_configs.values())
+    print(f"\n  Dataset/horizon configs seen: {len(all_configs)} total")
+    for model_name, configs in sorted(model_configs.items()):
+        print(f"    {model_name}: {len(configs)} configs")
+        missing = all_configs - configs
+        if missing:
+            print(f"      ⚠️  missing: {sorted(missing)}")
+
+    # Exclude sites where mean MASE > threshold OR mean CRPS > threshold
     excluded_sites: dict[tuple[str, str], set[str]] = {}
-    for (dataset_id, horizon, iid), values in site_mase_values.items():
-        if np.mean(values) > MASE_THRESHOLD:
+    all_site_keys = set(site_metric_values["MASE"]) | set(site_metric_values["CRPS"])
+    for key in all_site_keys:
+        dataset_id, horizon, iid = key
+        mase_vals = site_metric_values["MASE"].get(key, [])
+        crps_vals = site_metric_values["CRPS"].get(key, [])
+        if (mase_vals and np.mean(mase_vals) > THRESHOLD) or (crps_vals and np.mean(crps_vals) > THRESHOLD):
             excluded_sites.setdefault((dataset_id, horizon), set()).add(iid)
 
     # Log excluded sites with pollutant info
     if excluded_sites:
-        print(f"\n  MASE threshold ({MASE_THRESHOLD}) exclusions (applied to ALL models):")
+        print(f"\n  Threshold ({THRESHOLD}) exclusions — mean MASE>threshold OR mean CRPS>threshold (applied to ALL models):")
         for (ds, hz), ids in sorted(excluded_sites.items()):
             pollutant_counts: dict[str, int] = {}
             for iid in ids:
@@ -414,11 +534,15 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
             arr = npz_metrics.get(metric_name)
             if arr is not None and arr.shape[0] == n_series:
                 reduce_axes = tuple(range(1, arr.ndim))
-                per_series = np.nanmean(arr[:n_series], axis=reduce_axes).copy() if reduce_axes else arr[:n_series]
-                # Mask excluded sites across all metrics
-                for i, iid in enumerate(item_ids):
-                    if iid in exclude_ids:
-                        per_series[i] = np.nan
+                if metric_name == "RMSE":
+                    per_series = np.sqrt(np.nanmean(arr[:n_series] ** 2, axis=reduce_axes)).copy() if reduce_axes else arr[:n_series]
+                else:
+                    per_series = np.nanmean(arr[:n_series], axis=reduce_axes).copy() if reduce_axes else arr[:n_series]
+                # Mask excluded sites for MASE and CRPS
+                if metric_name in ("MASE", "CRPS"):
+                    for i, iid in enumerate(item_ids):
+                        if iid in exclude_ids:
+                            per_series[i] = np.nan
                 batch[metric_name] = per_series.tolist()
             else:
                 batch[metric_name] = [np.nan] * n_series
@@ -713,10 +837,17 @@ def main():
 
         # Build per-pollutant tables: mean across sites per pollutant
         pollutant_agg_rows = []
+        pol_subdir = output_dir / "per_pollutant"
+        pol_subdir.mkdir(parents=True, exist_ok=True)
+        table_num = 1
         datasets_in_results = sorted(pollutant_results["dataset_id"].unique())
         for dataset_id in datasets_in_results:
             ddf = pollutant_results[pollutant_results["dataset_id"] == dataset_id]
             dataset_pollutants = sorted(ddf["pollutant"].unique())
+
+            # Subfolder per dataset, using only the dataset name (no freq suffix)
+            dataset_subdir = pol_subdir / dataset_id.split("/")[0]
+            dataset_subdir.mkdir(parents=True, exist_ok=True)
 
             print(f"\n{'=' * 60}")
             print(f"  Dataset: {dataset_id}")
@@ -733,7 +864,15 @@ def main():
                 print(f"  {'─' * 40}")
                 print(agg.to_string(index=False))
 
-                # Collect for CSV
+
+                # Save individual LaTeX table
+                caption = f"{pollutant} leaderboard --- {display_dataset(dataset_id)}"
+                tex = to_latex_table(agg, caption, table_num, metric_cols=["MASE", "CRPS", "MAE", "RMSE"])
+                pol_tex = dataset_subdir / f"{pollutant}.tex"
+                pol_tex.write_text(tex)
+                table_num += 1
+
+                # Collect for combined CSV
                 agg_csv = agg.copy()
                 agg_csv.insert(0, "dataset_id", dataset_id)
                 agg_csv.insert(1, "pollutant", pollutant)
@@ -755,6 +894,14 @@ def main():
             balanced_csv = output_dir / "pollutant_balanced_leaderboard.csv"
             balanced_lb.to_csv(balanced_csv, index=False)
             print(f"   Saved pollutant-balanced leaderboard to {balanced_csv}")
+
+            balanced_tex = output_dir / "pollutant_balanced_leaderboard.tex"
+            balanced_caption = "Pollutant-balanced overall leaderboard (normalized by Seasonal Naive, gmean across datasets)"
+            balanced_tex.write_text(to_latex_table(
+                balanced_lb, balanced_caption, 2,
+                metric_cols=["MASE (norm.)", "CRPS (norm.)"],
+            ))
+            print(f"   Saved pollutant-balanced LaTeX table to {balanced_tex}")
 
         # Export per-pollutant results to CSV
         if pollutant_agg_rows:
@@ -788,9 +935,12 @@ def main():
         print("      Lower values are better. Seasonal Naive = 1.0")
         print("=" * 80)
 
-        overall_csv = output_dir / "overall_leaderboard.csv"
-        leaderboard.to_csv(overall_csv, index=False)
-        print(f"\n   Saved overall leaderboard to {overall_csv}")
+        overall_tex = output_dir / "overall_leaderboard.tex"
+        overall_tex.write_text(to_latex_table(
+            leaderboard, "Overall leaderboard (normalized by Seasonal Naive, gmean across datasets)", 1,
+            metric_cols=["MASE (norm.)", "CRPS (norm.)"],
+        ))
+        print(f"\n   Saved overall leaderboard LaTeX table to {overall_tex}")
 
 
 if __name__ == "__main__":

@@ -31,7 +31,6 @@ import pandas as pd
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from dotenv import load_dotenv
 from gluonts.time_feature import get_seasonality
-from tqdm.auto import tqdm
 
 from timebench.evaluation import save_window_predictions
 from timebench.evaluation.data import (
@@ -68,8 +67,6 @@ def run_dlinear_experiment(
     config_path: Path | None = None,
     quantile_levels: list[float] | None = None,
     max_epochs: int = 100,
-    lr: float = 1e-3,
-    pred_chunk: int = 10_000,
     early_stopping_patience: int = 10,
 ):
     """
@@ -186,7 +183,6 @@ def run_dlinear_experiment(
             hyperparams = {
                 "DLinear": {
                     "max_epochs": max_epochs,
-                    "lr": lr,
                 },
             }
             if early_stopping_patience > 0:
@@ -202,7 +198,7 @@ def run_dlinear_experiment(
 
             del train_df, train_tsdf, train_group
 
-            # --- Predict per test window (chunked to limit memory) ---
+            # --- Predict all test windows for this pollutant ---
             group_test_inputs = []
             dest_flat_indices = []
             for s_idx in series_indices:
@@ -212,35 +208,30 @@ def run_dlinear_experiment(
                     dest_flat_indices.append(base + w)
 
             num_total = len(group_test_inputs)
-            print(f"    [{pollutant}] Predicting {num_total} test windows (chunks of {pred_chunk})...")
+            print(f"    [{pollutant}] Predicting {num_total} test windows...")
 
             q_cols = [str(q) for q in quantile_levels]
 
-            num_chunks = (num_total + pred_chunk - 1) // pred_chunk
-            for chunk_start in tqdm(range(0, num_total, pred_chunk), total=num_chunks, desc=f"    {pollutant} predict"):
-                chunk_end = min(chunk_start + pred_chunk, num_total)
-                chunk_inputs = [
-                    {**e, "target": np.asarray(e["target"])[-effective_context_length:]}
-                    for e in group_test_inputs[chunk_start:chunk_end]
-                ]
-                chunk_dest = dest_flat_indices[chunk_start:chunk_end]
+            all_inputs = [
+                {**e, "target": np.asarray(e["target"])[-effective_context_length:]}
+                for e in group_test_inputs
+            ]
+            pred_df = _entries_to_ag_df(all_inputs, dataset.freq)
+            pred_tsdf = TimeSeriesDataFrame.from_data_frame(
+                pred_df, id_column="item_id", timestamp_column="timestamp",
+            )
+            predictions = predictor.predict(pred_tsdf)
 
-                pred_df = _entries_to_ag_df(chunk_inputs, dataset.freq)
-                pred_tsdf = TimeSeriesDataFrame.from_data_frame(
-                    pred_df, id_column="item_id", timestamp_column="timestamp",
-                )
-                predictions = predictor.predict(pred_tsdf)
+            # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
+            # with columns "mean", "0.1", "0.2", ..., "0.9"
+            pred_reset = predictions[q_cols].reset_index()
+            pred_reset["_order"] = pred_reset["item_id"].astype(int)
+            pred_reset = pred_reset.sort_values(["_order", "timestamp"])
+            pred_vals = pred_reset[q_cols].to_numpy()  # (num_total * h, num_q)
+            pred_vals = pred_vals.reshape(num_total, h, num_q)
+            fc_quantiles[dest_flat_indices] = pred_vals.transpose(0, 2, 1)  # (num_total, num_q, h)
 
-                # predictions is a TimeSeriesDataFrame indexed by (item_id, timestamp)
-                # with columns "mean", "0.1", "0.2", ..., "0.9"
-                pred_reset = predictions[q_cols].reset_index()
-                pred_reset["_order"] = pred_reset["item_id"].astype(int)
-                pred_reset = pred_reset.sort_values(["_order", "timestamp"])
-                pred_vals = pred_reset[q_cols].to_numpy()  # (chunk_size * h, num_q)
-                pred_vals = pred_vals.reshape(len(chunk_dest), h, num_q)
-                fc_quantiles[chunk_dest] = pred_vals.transpose(0, 2, 1)  # (chunk_size, num_q, h)
-
-                del pred_df, pred_tsdf, predictions
+            del pred_df, pred_tsdf, predictions
 
             del predictor
             gc.collect()
@@ -253,7 +244,6 @@ def run_dlinear_experiment(
             "model": "DLinear",
             "context_length": effective_context_length,
             "max_epochs": max_epochs,
-            "lr": lr,
             "early_stopping_patience": early_stopping_patience,
             "season_length": season_length,
             "quantile_levels": quantile_levels,
@@ -293,8 +283,6 @@ def main():
     parser.add_argument("--max-epochs", type=int, default=100, help="Max training epochs")
     parser.add_argument("--early-stopping-patience", type=int, default=10,
                         help="Epochs without val loss improvement before stopping (0 to disable)")
-    parser.add_argument("--pred-chunk", type=int, default=10000, help="Prediction chunk size (windows per batch)")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--quantiles", type=float, nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
                         help="Quantile levels to save")
@@ -327,8 +315,6 @@ def main():
                 config_path=config_path,
                 quantile_levels=args.quantiles,
                 max_epochs=args.max_epochs,
-                lr=args.lr,
-                pred_chunk=args.pred_chunk,
                 early_stopping_patience=args.early_stopping_patience,
             )
         except Exception as e:
