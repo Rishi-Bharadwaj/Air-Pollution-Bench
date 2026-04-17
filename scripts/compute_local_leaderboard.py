@@ -29,7 +29,7 @@ from scipy import stats
 # Add parent directory to path to import timebench utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from leaderboard_utils import extract_pollutant, display_dataset, to_latex_table
+from leaderboard_utils import extract_pollutant, display_dataset, to_latex_table, MODEL_GROUPS, GROUP_ORDER
 from leaderboard_helpers import (
     normalize_by_seasonal_naive,
     check_result_consistency,
@@ -75,7 +75,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     Load per-series metrics from NPZ files, map to pollutant via item_ids in config.json,
     and return per-pollutant aggregated metrics.
 
-    Sites where MASE > threshold for ANY model are excluded from ALL models
+    Sites where MASE > threshold for the mean of models are excluded
     to ensure a fair comparison.
 
     Returns:
@@ -175,8 +175,44 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     ].mean()
 
 
+def _save_per_dataset_horizon_tables(
+    balanced_norm: pd.DataFrame,
+    output_dir: Path,
+    metric: str,
+    model_groups: dict | None = None,
+    group_order: list | None = None,
+) -> None:
+    """Save per-(dataset_id, horizon) normalized leaderboard LaTeX tables."""
+    subdir = output_dir / "per_dataset_horizon"
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    df = balanced_norm.rename(columns={"MASE": "MASE (norm.)", "CRPS": "CRPS (norm.)"})
+    sort_col = "MASE (norm.)" if metric == "MASE" else "CRPS (norm.)"
+
+    table_num = 1
+    for (dataset_id, horizon), grp_df in df.groupby(["dataset_id", "horizon"]):
+        tbl = grp_df[["model", "MASE (norm.)", "CRPS (norm.)"]].copy().round(3)
+        if model_groups is None:
+            tbl = tbl.sort_values(by=sort_col, ascending=True).reset_index(drop=True)
+        caption = f"Normalized leaderboard --- {display_dataset(dataset_id)} --- {horizon}"
+        tex = to_latex_table(
+            tbl, caption, table_num,
+            metric_cols=["MASE (norm.)", "CRPS (norm.)"],
+            model_groups=model_groups,
+            group_order=group_order,
+        )
+        fname = subdir / f"{dataset_id.replace('/', '_')}_{horizon}.tex"
+        fname.write_text(tex)
+        table_num += 1
+    print(f"   Saved {table_num - 1} per-(dataset, horizon) LaTeX tables to {subdir}")
+
+
 def get_pollutant_balanced_leaderboard(
-    pollutant_results: pd.DataFrame, metric: str = "MASE"
+    pollutant_results: pd.DataFrame,
+    metric: str = "MASE",
+    output_dir: Path | None = None,
+    model_groups: dict | None = None,
+    group_order: list | None = None,
 ) -> pd.DataFrame:
     """
     Compute a pollutant-balanced overall leaderboard.
@@ -184,6 +220,7 @@ def get_pollutant_balanced_leaderboard(
     1. Mean MASE/CRPS per (model, dataset, horizon, pollutant) — across sites
     2. Mean of those per (model, dataset, horizon) — balanced per-dataset score
     3. Normalize by Seasonal Naive's balanced score per (dataset, horizon)
+       → if output_dir given, saves per-(dataset, horizon) LaTeX tables here
     4. Geometric mean across (dataset, horizon) configs
 
     Returns leaderboard DataFrame similar to get_overall_leaderboard.
@@ -211,6 +248,10 @@ def get_pollutant_balanced_leaderboard(
 
     if balanced_norm.empty:
         return pd.DataFrame()
+
+    # Save per-(dataset, horizon) tables before aggregating across datasets
+    if output_dir is not None:
+        _save_per_dataset_horizon_tables(balanced_norm, output_dir, metric, model_groups, group_order)
 
     # Step 4: geometric mean across (dataset, horizon) configs
     def gmean_with_nan(x):
@@ -323,7 +364,7 @@ def main():
             pdf = ddf[ddf["pollutant"] == pollutant]
             agg = pdf.groupby("model")[["MASE", "CRPS", "MAE", "RMSE"]].mean().reset_index()
             agg = agg.sort_values(by=metric, ascending=True).reset_index(drop=True)
-            agg = agg.round(4)
+            agg = agg.round(3)
 
             print(f"\n  {'─' * 40}")
             print(f"    Pollutant: {pollutant}")
@@ -333,7 +374,8 @@ def main():
 
             # Save individual LaTeX table
             caption = f"{pollutant} leaderboard --- {display_dataset(dataset_id)}"
-            tex = to_latex_table(agg, caption, table_num, metric_cols=["MASE", "CRPS", "MAE", "RMSE"])
+            tex = to_latex_table(agg, caption, table_num, metric_cols=["MASE", "CRPS", "MAE", "RMSE"],
+                                 model_groups=MODEL_GROUPS, group_order=GROUP_ORDER)
             pol_tex = dataset_subdir / f"{pollutant}.tex"
             pol_tex.write_text(tex)
             table_num += 1
@@ -341,7 +383,12 @@ def main():
     print()
 
     # Pollutant-balanced overall leaderboard
-    balanced_lb = get_pollutant_balanced_leaderboard(pollutant_results, metric=metric)
+    balanced_lb = get_pollutant_balanced_leaderboard(
+        pollutant_results, metric=metric,
+        output_dir=output_dir,
+        model_groups=MODEL_GROUPS,
+        group_order=GROUP_ORDER,
+    )
     if not balanced_lb.empty:
         print(f"\n{'=' * 60}")
         print("  Pollutant-Balanced Overall Leaderboard")
@@ -360,6 +407,7 @@ def main():
         balanced_tex.write_text(to_latex_table(
             balanced_lb, balanced_caption, 2,
             metric_cols=["MASE (norm.)", "CRPS (norm.)"],
+            model_groups=MODEL_GROUPS, group_order=GROUP_ORDER,
         ))
         print(f"   Saved pollutant-balanced LaTeX table to {balanced_tex}")
 

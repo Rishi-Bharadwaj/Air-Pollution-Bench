@@ -11,6 +11,34 @@ _DATASET_NAME_MAP = {
 }
 
 
+# Model category groupings for leaderboard tables.
+# Edit these to match your actual model names.
+MODEL_GROUPS: dict[str, str] = {
+        
+    # TSFMs
+    "chronos_bolt_base": "TSFMs",
+    "chronos2_base": "TSFMs",
+    "moirai_base": "TSFMs",
+    "moirai2": "TSFMs",
+    "TimesFM-1.0": "TSFMs",
+    "TimesFM-2.0": "TSFMs",
+    "TimesFM-2.5": "TSFMs",
+    "TiRex": "TSFMs",
+    "visiontspp_base": "TSFMs",
+    "sundial_base": "TSFMs",
+    "kairos": "TSFMs",
+    # ML Baselines
+    "patchtst": "ML Baselines",
+    "dlinear": "ML Baselines",
+    # Statistical Baselines
+    "seasonal_naive": "Statistical Baselines",
+    "auto_ets": "Statistical Baselines",
+
+}
+
+GROUP_ORDER: list[str] = ["TSFMs", "ML Baselines", "Statistical Baselines"]
+
+
 def display_dataset(dataset_id: str) -> str:
     """Return a human-readable dataset name, stripping frequency suffix and mapping aliases.
 
@@ -29,6 +57,8 @@ def to_latex_table(
     table_num: int,
     metric_cols: list = None,
     lower_is_better: bool = True,
+    model_groups: dict[str, str] | None = None,
+    group_order: list[str] | None = None,
 ) -> str:
     """
     Convert a DataFrame to a LaTeX table snippet (suitable for \\input{}).
@@ -38,15 +68,31 @@ def to_latex_table(
       - Underline: second best
       - Italics:   third best
 
+    If model_groups is provided, rows are sorted by group then alphabetically
+    within each group, with a \\multicolumn header row separating groups.
+    Models not in model_groups are placed in an "Other" group at the end.
+
     Caption is placed above the table in 9pt type, centered if it fits on
     one line (<= 60 chars), otherwise flush left, with 0.1in spacing before
     and after. Requires booktabs in the parent document.
     """
-    df = df.reset_index(drop=True)
+    df = df.reset_index(drop=True).copy()
     if metric_cols is None:
         metric_cols = [c for c in df.columns if c != "model"]
 
-    # Determine rank-based formatting per metric column
+    # Group-based reordering: sort by (group order, model name alphabetically)
+    group_labels = None
+    if model_groups is not None and "model" in df.columns:
+        if group_order is None:
+            group_order = GROUP_ORDER
+        go_idx = {g: i for i, g in enumerate(group_order)}
+        df["_group"] = df["model"].map(model_groups).fillna("Other")
+        df["_gord"] = df["_group"].map(lambda g: go_idx.get(g, len(go_idx)))
+        df = df.sort_values(["_gord", "model"]).reset_index(drop=True)
+        group_labels = df["_group"].tolist()
+        df = df.drop(columns=["_group", "_gord"])
+
+    # Determine rank-based formatting per metric column (global across all models)
     cell_fmt: dict[tuple[int, str], str] = {}
     for col in metric_cols:
         if col not in df.columns:
@@ -79,11 +125,22 @@ def to_latex_table(
         return s
 
     cols = df.columns.tolist()
-    col_spec = "l" + "r" * (len(cols) - 1)
+    n_cols = len(cols)
+    col_spec = "l" + "r" * (n_cols - 1)
     header = " & ".join(f"\\textbf{{{_escape(c)}}}" for c in cols) + " \\\\"
 
     body_lines = []
+    current_group = None
     for idx, row in df.iterrows():
+        if group_labels is not None:
+            grp = group_labels[idx]
+            if grp != current_group:
+                if current_group is not None:
+                    body_lines.append("\\midrule")
+                body_lines.append(
+                    f"\\multicolumn{{{n_cols}}}{{l}}{{\\small\\textit{{{_escape(grp)}}}}} \\\\"
+                )
+                current_group = grp
         cells = [_fmt(row[c], cell_fmt.get((idx, c)), is_str=(c not in metric_cols)) for c in cols]
         body_lines.append(" & ".join(cells) + " \\\\")
 
