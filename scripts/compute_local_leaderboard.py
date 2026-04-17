@@ -31,8 +31,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from leaderboard_utils import extract_pollutant, display_dataset, to_latex_table
 from leaderboard_helpers import (
-    get_all_datasets_results,
-    compute_ranks,
     normalize_by_seasonal_naive,
     check_result_consistency,
     SEASONAL_NAIVE_MODEL,
@@ -240,16 +238,6 @@ def get_pollutant_balanced_leaderboard(
 
 
 
-def filter_by_datasets(df: pd.DataFrame, dataset_ids: list[str]) -> pd.DataFrame:
-    """Filter results DataFrame to only include specified dataset_ids."""
-    if not dataset_ids:
-        raise ValueError("No dataset_ids provided")
-    missing = set(dataset_ids) - set(df["dataset_id"].unique())
-    if missing:
-        raise ValueError(f"Datasets not found in results: {missing}")
-    return df[df["dataset_id"].isin(dataset_ids)].copy()
-
-
 def main():
     import argparse
     import yaml
@@ -288,45 +276,23 @@ def main():
         print(f"  Filtering to datasets: {dataset_filter}")
     print()
 
-    # Step 1: Load all results (including seasonal_naive) from results directory
     results_root = Path(results_dir)
-    print(f"Step 1: Loading results from {results_root}...")
 
     if not results_root.exists():
         print(f"❌ Error: Results directory does not exist: {results_root}")
         sys.exit(1)
 
-    all_results = get_all_datasets_results(results_root)
-
-    if all_results.empty:
-        print(f"❌ No results found in {results_root}")
-        sys.exit(1)
-
-    print(f"✅ Loaded {len(all_results)} results")
-
-    # Consistency check: all models must have the same item_ids and result shapes
-    print(f"\nStep 1b: Checking result consistency across models and datasets...")
-    check_result_consistency(results_root, dataset_filter)
-
-    # Filter to requested datasets
-    if dataset_filter:
-        all_results = filter_by_datasets(all_results, dataset_filter)
-        print(f"   After filtering: {len(all_results)} results for {dataset_filter}")
-
-    # Check that seasonal_naive is present
-    if SEASONAL_NAIVE_MODEL not in all_results["model"].values:
+    if not (results_root / SEASONAL_NAIVE_MODEL).is_dir():
         print(f"❌ No '{SEASONAL_NAIVE_MODEL}' results found in {results_root}.")
         print(f"   Run seasonal_naive first, or place its results in {results_root / SEASONAL_NAIVE_MODEL}/")
         sys.exit(1)
 
-    # Step 2: Compute ranks
-    print(f"\nStep 2: Computing ranks...")
-    all_results = compute_ranks(all_results, groupby_cols=["dataset_id", "horizon"])
+    # Step 1: Consistency check
+    print(f"Step 1: Checking result consistency across models and datasets...")
+    check_result_consistency(results_root, dataset_filter)
 
-    print(f"   Models: {sorted(all_results['model'].unique())}")
-    print(f"   Datasets: {sorted(all_results['dataset_id'].unique())}")
-
-    print(f"\nStep 3: Computing per-pollutant leaderboard...")
+    # Step 2: Per-pollutant results
+    print(f"\nStep 2: Computing per-pollutant leaderboard...")
     pollutant_results = get_per_pollutant_results(results_root, dataset_filter)
 
     if pollutant_results.empty:
@@ -337,7 +303,6 @@ def main():
     print(f"   Found pollutants: {pollutants}")
 
     # Build per-pollutant tables: mean across sites per pollutant
-    pollutant_agg_rows = []
     pol_subdir = output_dir / "per_pollutant"
     pol_subdir.mkdir(parents=True, exist_ok=True)
     table_num = 1
@@ -373,12 +338,6 @@ def main():
             pol_tex.write_text(tex)
             table_num += 1
 
-            # Collect for combined CSV
-            agg_csv = agg.copy()
-            agg_csv.insert(0, "dataset_id", dataset_id)
-            agg_csv.insert(1, "pollutant", pollutant)
-            pollutant_agg_rows.append(agg_csv)
-
     print()
 
     # Pollutant-balanced overall leaderboard
@@ -403,18 +362,6 @@ def main():
             metric_cols=["MASE (norm.)", "CRPS (norm.)"],
         ))
         print(f"   Saved pollutant-balanced LaTeX table to {balanced_tex}")
-
-    # Export per-pollutant results to CSV
-    if pollutant_agg_rows:
-        pollutant_csv_df = pd.concat(pollutant_agg_rows, ignore_index=True)
-        pollutant_csv = output_dir / "per_pollutant_leaderboard.csv"
-        pollutant_csv_df.to_csv(pollutant_csv, index=False)
-        print(f"   Saved per-pollutant leaderboard to {pollutant_csv}")
-
-        raw_pollutant_csv = output_dir / "per_pollutant_results.csv"
-        pollutant_results.round(4).to_csv(raw_pollutant_csv, index=False)
-        print(f"   Saved raw per-pollutant results to {raw_pollutant_csv}")
-
 
 if __name__ == "__main__":
     main()
