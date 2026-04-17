@@ -182,9 +182,11 @@ def _save_per_dataset_horizon_tables(
     model_groups: dict | None = None,
     group_order: list | None = None,
 ) -> None:
-    """Save per-(dataset_id, horizon) normalized leaderboard LaTeX tables."""
+    """Save per-(dataset_id, horizon) normalized leaderboard LaTeX tables and CSVs."""
     subdir = output_dir / "per_dataset_horizon"
+    csv_subdir = output_dir / "per_dataset_horizon_csv"
     subdir.mkdir(parents=True, exist_ok=True)
+    csv_subdir.mkdir(parents=True, exist_ok=True)
 
     df = balanced_norm.rename(columns={"MASE": "MASE (norm.)", "CRPS": "CRPS (norm.)"})
     sort_col = "MASE (norm.)" if metric == "MASE" else "CRPS (norm.)"
@@ -201,10 +203,13 @@ def _save_per_dataset_horizon_tables(
             model_groups=model_groups,
             group_order=group_order,
         )
-        fname = subdir / f"{dataset_id.replace('/', '_')}_{horizon}.tex"
-        fname.write_text(tex)
+        stem = f"{dataset_id.replace('/', '_')}_{horizon}"
+        (subdir / f"{stem}.tex").write_text(tex)
+        tbl.sort_values(by=sort_col, ascending=True).reset_index(drop=True).to_csv(
+            csv_subdir / f"{stem}.csv", index=False
+        )
         table_num += 1
-    print(f"   Saved {table_num - 1} per-(dataset, horizon) LaTeX tables to {subdir}")
+    print(f"   Saved {table_num - 1} per-(dataset, horizon) tables to {subdir} and {csv_subdir}")
 
 
 def get_pollutant_balanced_leaderboard(
@@ -345,7 +350,9 @@ def main():
 
     # Build per-pollutant tables: mean across sites per pollutant
     pol_subdir = output_dir / "per_pollutant"
+    pol_csv_subdir = output_dir / "per_pollutant_csv"
     pol_subdir.mkdir(parents=True, exist_ok=True)
+    pol_csv_subdir.mkdir(parents=True, exist_ok=True)
     table_num = 1
     datasets_in_results = sorted(pollutant_results["dataset_id"].unique())
     for dataset_id in datasets_in_results:
@@ -354,7 +361,9 @@ def main():
 
         # Subfolder per dataset, using only the dataset name (no freq suffix)
         dataset_subdir = pol_subdir / dataset_id.split("/")[0]
+        dataset_csv_subdir = pol_csv_subdir / dataset_id.split("/")[0]
         dataset_subdir.mkdir(parents=True, exist_ok=True)
+        dataset_csv_subdir.mkdir(parents=True, exist_ok=True)
 
         print(f"\n{'=' * 60}")
         print(f"  Dataset: {dataset_id}")
@@ -372,12 +381,12 @@ def main():
             print(agg.to_string(index=False))
 
 
-            # Save individual LaTeX table
+            # Save individual LaTeX table and CSV
             caption = f"{pollutant} leaderboard --- {display_dataset(dataset_id)}"
             tex = to_latex_table(agg, caption, table_num, metric_cols=["MASE", "CRPS", "MAE", "RMSE"],
                                  model_groups=MODEL_GROUPS, group_order=GROUP_ORDER)
-            pol_tex = dataset_subdir / f"{pollutant}.tex"
-            pol_tex.write_text(tex)
+            (dataset_subdir / f"{pollutant}.tex").write_text(tex)
+            agg.to_csv(dataset_csv_subdir / f"{pollutant}.csv", index=False)
             table_num += 1
 
     print()

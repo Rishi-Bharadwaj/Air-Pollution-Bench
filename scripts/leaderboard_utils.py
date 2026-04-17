@@ -151,7 +151,7 @@ def to_latex_table(
     )
 
     return "\n".join([
-        "\\begin{table}[h]",
+        "\\begin{table}[H]",
         "\\vspace{0.1in}",
         caption_tex,
         "\\vspace{0.1in}",
