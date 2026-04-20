@@ -191,14 +191,13 @@ def _save_per_dataset_horizon_tables(
     df = balanced_norm.rename(columns={"MASE": "MASE (norm.)", "CRPS": "CRPS (norm.)"})
     sort_col = "MASE (norm.)" if metric == "MASE" else "CRPS (norm.)"
 
-    table_num = 1
-    for (dataset_id, horizon), grp_df in df.groupby(["dataset_id", "horizon"]):
+    for i, ((dataset_id, horizon), grp_df) in enumerate(df.groupby(["dataset_id", "horizon"]), 1):
         tbl = grp_df[["model", "MASE (norm.)", "CRPS (norm.)"]].copy().round(3)
         if model_groups is None:
             tbl = tbl.sort_values(by=sort_col, ascending=True).reset_index(drop=True)
         caption = f"Normalized leaderboard --- {display_dataset(dataset_id)} --- {horizon}"
         tex = to_latex_table(
-            tbl, caption, table_num,
+            tbl, caption,
             metric_cols=["MASE (norm.)", "CRPS (norm.)"],
             model_groups=model_groups,
             group_order=group_order,
@@ -208,8 +207,7 @@ def _save_per_dataset_horizon_tables(
         tbl.sort_values(by=sort_col, ascending=True).reset_index(drop=True).to_csv(
             csv_subdir / f"{stem}.csv", index=False
         )
-        table_num += 1
-    print(f"   Saved {table_num - 1} per-(dataset, horizon) tables to {subdir} and {csv_subdir}")
+    print(f"   Saved {i} per-(dataset, horizon) tables to {subdir} and {csv_subdir}")
 
 
 def get_pollutant_balanced_leaderboard(
@@ -353,7 +351,6 @@ def main():
     pol_csv_subdir = output_dir / "per_pollutant_csv"
     pol_subdir.mkdir(parents=True, exist_ok=True)
     pol_csv_subdir.mkdir(parents=True, exist_ok=True)
-    table_num = 1
     datasets_in_results = sorted(pollutant_results["dataset_id"].unique())
     for dataset_id in datasets_in_results:
         ddf = pollutant_results[pollutant_results["dataset_id"] == dataset_id]
@@ -383,11 +380,10 @@ def main():
 
             # Save individual LaTeX table and CSV
             caption = f"{pollutant} leaderboard --- {display_dataset(dataset_id)}"
-            tex = to_latex_table(agg, caption, table_num, metric_cols=["MASE", "CRPS", "MAE", "RMSE"],
+            tex = to_latex_table(agg, caption, metric_cols=["MASE", "CRPS", "MAE", "RMSE"],
                                  model_groups=MODEL_GROUPS, group_order=GROUP_ORDER)
             (dataset_subdir / f"{pollutant}.tex").write_text(tex)
             agg.to_csv(dataset_csv_subdir / f"{pollutant}.csv", index=False)
-            table_num += 1
 
     print()
 
@@ -412,9 +408,9 @@ def main():
         print(f"   Saved pollutant-balanced leaderboard to {balanced_csv}")
 
         balanced_tex = output_dir / "pollutant_balanced_leaderboard.tex"
-        balanced_caption = "Pollutant-balanced overall leaderboard (normalized by Seasonal Naive, gmean across datasets)"
+        balanced_caption = "Pollutant-balanced overall leaderboard"
         balanced_tex.write_text(to_latex_table(
-            balanced_lb, balanced_caption, 2,
+            balanced_lb, balanced_caption,
             metric_cols=["MASE (norm.)", "CRPS (norm.)"],
             model_groups=MODEL_GROUPS, group_order=GROUP_ORDER,
         ))

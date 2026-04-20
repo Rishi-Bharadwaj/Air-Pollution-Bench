@@ -54,7 +54,6 @@ def display_dataset(dataset_id: str) -> str:
 def to_latex_table(
     df: pd.DataFrame,
     caption: str,
-    table_num: int,
     metric_cols: list = None,
     lower_is_better: bool = True,
     model_groups: dict[str, str] | None = None,
@@ -71,10 +70,6 @@ def to_latex_table(
     If model_groups is provided, rows are sorted by group then alphabetically
     within each group, with a \\multicolumn header row separating groups.
     Models not in model_groups are placed in an "Other" group at the end.
-
-    Caption is placed above the table in 9pt type, centered if it fits on
-    one line (<= 60 chars), otherwise flush left, with 0.1in spacing before
-    and after. Requires booktabs in the parent document.
     """
     df = df.reset_index(drop=True).copy()
     if metric_cols is None:
@@ -115,7 +110,13 @@ def to_latex_table(
         return s
 
     def _fmt(val, fmt, is_str=False):
-        s = _escape(str(val)) if is_str else str(val)
+        if is_str:
+            s = _escape(str(val))
+        else:
+            try:
+                s = f"{float(val):.3f}"
+            except (ValueError, TypeError):
+                s = str(val)
         if fmt == "bold":
             return f"\\textbf{{{s}}}"
         if fmt == "underline":
@@ -127,7 +128,7 @@ def to_latex_table(
     cols = df.columns.tolist()
     n_cols = len(cols)
     col_spec = "l" + "r" * (n_cols - 1)
-    header = " & ".join(f"\\textbf{{{_escape(c)}}}" for c in cols) + " \\\\"
+    header = " & ".join(_escape(c) for c in cols) + " \\\\"
 
     body_lines = []
     current_group = None
@@ -138,23 +139,15 @@ def to_latex_table(
                 if current_group is not None:
                     body_lines.append("\\midrule")
                 body_lines.append(
-                    f"\\multicolumn{{{n_cols}}}{{l}}{{\\small\\textit{{{_escape(grp)}}}}} \\\\"
+                    f"\\multicolumn{{{n_cols}}}{{l}}{{{_escape(grp)}}} \\\\"
                 )
                 current_group = grp
         cells = [_fmt(row[c], cell_fmt.get((idx, c)), is_str=(c not in metric_cols)) for c in cols]
         body_lines.append(" & ".join(cells) + " \\\\")
 
-    caption_align = "centering" if len(caption) <= 60 else "raggedright"
-    caption_tex = (
-        f"{{\\fontsize{{9}}{{11}}\\selectfont\\{caption_align}"
-        f" \\textit{{Table~{table_num}:}} {_escape(caption)}\\par}}"
-    )
-
     return "\n".join([
         "\\begin{table}[H]",
-        "\\vspace{0.1in}",
-        caption_tex,
-        "\\vspace{0.1in}",
+        f"\\caption{{{_escape(caption)}}}",
         "\\centering",
         f"\\begin{{tabular}}{{{col_spec}}}",
         "\\toprule",

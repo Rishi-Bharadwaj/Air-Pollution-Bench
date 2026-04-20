@@ -3,45 +3,10 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from scipy import stats
 
 # Add parent directory to path to import timebench utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
 SEASONAL_NAIVE_MODEL = "seasonal_naive"
-
-
-def load_time_results(root_dir: Path, model_name: str, dataset_with_freq: str, horizon: str):
-    """
-    Load TIME results from NPZ files for a specific model, dataset, and horizon.
-
-    Args:
-        root_dir: Root directory containing TIME results
-        model_name: Model name (e.g., "chronos2")
-        dataset_with_freq: Dataset and freq combined (e.g., "Traffic/15T")
-        horizon: Horizon name (e.g., "short", "medium", "long")
-
-    Returns:
-        tuple: (metrics_dict, config_dict) or (None, None) if not found
-    """
-    horizon_dir = root_dir / model_name / dataset_with_freq / horizon
-    metrics_path = horizon_dir / "metrics.npz"
-    config_path = horizon_dir / "config.json"
-
-    if not metrics_path.exists():
-        return None, None
-
-    metrics = np.load(metrics_path)
-    metrics_dict = {k: metrics[k] for k in metrics.files}
-
-    config_dict = {}
-    if config_path.exists():
-        import json
-        with open(config_path, "r") as f:
-            config_dict = json.load(f)
-
-    return metrics_dict, config_dict
-
-
 
 def normalize_by_seasonal_naive(
     df: pd.DataFrame,
