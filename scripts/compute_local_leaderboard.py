@@ -178,36 +178,110 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
 def _save_per_dataset_horizon_tables(
     balanced_norm: pd.DataFrame,
     output_dir: Path,
-    metric: str,
     model_groups: dict | None = None,
     group_order: list | None = None,
 ) -> None:
-    """Save per-(dataset_id, horizon) normalized leaderboard LaTeX tables and CSVs."""
-    subdir = output_dir / "per_dataset_horizon"
-    csv_subdir = output_dir / "per_dataset_horizon_csv"
-    subdir.mkdir(parents=True, exist_ok=True)
-    csv_subdir.mkdir(parents=True, exist_ok=True)
+    """Save combined MASE table: models as rows, datasets as columns (averaged across horizons)."""
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    df = balanced_norm.rename(columns={"MASE": "MASE (norm.)", "CRPS": "CRPS (norm.)"})
-    sort_col = "MASE (norm.)" if metric == "MASE" else "CRPS (norm.)"
+    # Average normalized MASE across horizons per (model, dataset_id)
+    avg = (
+        balanced_norm.groupby(["model", "dataset_id"], as_index=False)["MASE"]
+        .mean()
+        .round(3)
+    )
 
-    for i, ((dataset_id, horizon), grp_df) in enumerate(df.groupby(["dataset_id", "horizon"]), 1):
-        tbl = grp_df[["model", "MASE (norm.)", "CRPS (norm.)"]].copy().round(3)
-        if model_groups is None:
-            tbl = tbl.sort_values(by=sort_col, ascending=True).reset_index(drop=True)
-        caption = f"Normalized leaderboard --- {display_dataset(dataset_id)} --- {horizon}"
-        tex = to_latex_table(
-            tbl, caption,
-            metric_cols=["MASE (norm.)", "CRPS (norm.)"],
-            model_groups=model_groups,
-            group_order=group_order,
-        )
-        stem = f"{dataset_id.replace('/', '_')}_{horizon}"
-        (subdir / f"{stem}.tex").write_text(tex)
-        tbl.sort_values(by=sort_col, ascending=True).reset_index(drop=True).to_csv(
-            csv_subdir / f"{stem}.csv", index=False
-        )
-    print(f"   Saved {i} per-(dataset, horizon) tables to {subdir} and {csv_subdir}")
+    # Pivot: rows=model, columns=dataset display name
+    avg["dataset"] = avg["dataset_id"].apply(display_dataset)
+    pivot = avg.pivot(index="model", columns="dataset", values="MASE")
+    pivot.columns.name = None
+    pivot = pivot.reset_index()
+
+    dataset_cols = [c for c in pivot.columns if c != "model"]
+
+    # Sort by mean MASE (to_latex_table will re-sort by group if model_groups given)
+    pivot["_mean"] = pivot[dataset_cols].mean(axis=1)
+    pivot = pivot.sort_values("_mean", ascending=True).drop(columns="_mean").reset_index(drop=True)
+
+    print(pivot.to_string(index=False))
+
+    csv_path = output_dir / "per_dataset_mase.csv"
+    pivot.to_csv(csv_path, index=False)
+    print(f"   Saved per-dataset MASE table to {csv_path}")
+
+    tex_path = output_dir / "per_dataset_mase.tex"
+    tex = to_latex_table(
+        pivot,
+        caption="Normalized MASE per dataset",
+        metric_cols=dataset_cols,
+        model_groups=model_groups,
+        group_order=group_order,
+    )
+    tex_path.write_text(tex)
+    print(f"   Saved per-dataset MASE LaTeX table to {tex_path}")
+
+
+def _save_per_pollutant_table(
+    per_pol: pd.DataFrame,
+    output_dir: Path,
+    model_groups: dict | None = None,
+    group_order: list | None = None,
+) -> None:
+    """Save combined MASE table: models as rows, pollutants as columns (averaged across datasets and horizons)."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Normalize by seasonal naive per (dataset_id, horizon, pollutant)
+    # Must include pollutant in key — otherwise the baseline map gets overwritten
+    # by whichever pollutant is last, and all models get divided by the wrong value.
+    per_pol_norm = normalize_by_seasonal_naive(
+        per_pol,
+        baseline_model=SEASONAL_NAIVE_MODEL,
+        metrics=["MASE"],
+        groupby_cols=["dataset_id", "horizon", "pollutant"],
+    )
+    if per_pol_norm.empty:
+        return
+
+    # Geometric mean of normalized MASE across (dataset_id, horizon) per (model, pollutant)
+    # Consistent with overall leaderboard which uses gmean across (dataset_id, horizon) configs
+    def _gmean(x):
+        valid = x.dropna()
+        return stats.gmean(valid) if len(valid) > 0 else np.nan
+
+    avg = (
+        per_pol_norm.groupby(["model", "pollutant"])["MASE"]
+        .agg(_gmean)
+        .reset_index()
+        .round(3)
+    )
+
+    # Pivot: rows=model, columns=pollutant
+    pivot = avg.pivot(index="model", columns="pollutant", values="MASE")
+    pivot.columns.name = None
+    pivot = pivot.reset_index()
+
+    pollutant_cols = [c for c in pivot.columns if c != "model"]
+
+    # Sort by mean MASE (to_latex_table will re-sort by group if model_groups given)
+    pivot["_mean"] = pivot[pollutant_cols].mean(axis=1)
+    pivot = pivot.sort_values("_mean", ascending=True).drop(columns="_mean").reset_index(drop=True)
+
+    print(pivot.to_string(index=False))
+
+    csv_path = output_dir / "per_pollutant_mase.csv"
+    pivot.to_csv(csv_path, index=False)
+    print(f"   Saved per-pollutant MASE table to {csv_path}")
+
+    tex_path = output_dir / "per_pollutant_mase.tex"
+    tex = to_latex_table(
+        pivot,
+        caption="Normalized MASE per pollutant",
+        metric_cols=pollutant_cols,
+        model_groups=model_groups,
+        group_order=group_order,
+    )
+    tex_path.write_text(tex)
+    print(f"   Saved per-pollutant MASE LaTeX table to {tex_path}")
 
 
 def get_pollutant_balanced_leaderboard(
@@ -254,7 +328,8 @@ def get_pollutant_balanced_leaderboard(
 
     # Save per-(dataset, horizon) tables before aggregating across datasets
     if output_dir is not None:
-        _save_per_dataset_horizon_tables(balanced_norm, output_dir, metric, model_groups, group_order)
+        _save_per_dataset_horizon_tables(balanced_norm, output_dir, model_groups, group_order)
+        _save_per_pollutant_table(per_pol, output_dir, model_groups, group_order)
 
     # Step 4: geometric mean across (dataset, horizon) configs
     def gmean_with_nan(x):
