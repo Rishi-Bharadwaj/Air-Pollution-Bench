@@ -139,7 +139,7 @@ def to_latex_table(
                 if current_group is not None:
                     body_lines.append("\\midrule")
                 body_lines.append(
-                    f"\\multicolumn{{{n_cols}}}{{l}}{{{_escape(grp)}}} \\\\"
+                    f"\\multicolumn{{{n_cols}}}{{l}}{{\\textbf{{{_escape(grp)}}}}} \\\\"
                 )
                 current_group = grp
         cells = [_fmt(row[c], cell_fmt.get((idx, c)), is_str=(c not in metric_cols)) for c in cols]

@@ -135,14 +135,14 @@ models:
   #     max_epochs: 100
   #     early_stopping_patience: 10
 
-  dlinear:
-    script: experiments/dlinear.py
-    packages:
-      - autogluon.timeseries
-    args:
-      context_length: 168
-      max_epochs: 100
-      early_stopping_patience: 10
+  # dlinear:
+  #   script: experiments/dlinear.py
+  #   packages:
+  #     - autogluon.timeseries
+  #   args:
+  #     context_length: 168
+  #     max_epochs: 100
+  #     early_stopping_patience: 10
 
 
 
@@ -154,7 +154,15 @@ models:
   #     context_length: 168
   #     max_epochs: 100
   #     early_stopping_patience: 10
-      
+
+  lightgbm:
+    script: experiments/lgbm.py
+    packages:
+      - autogluon.timeseries
+      - lightgbm
+    args:
+      num_boost_round: 1000
+      early_stopping: 10
   # kairos:
   #   script: experiments/kairos_model.py
   #   git_clone:

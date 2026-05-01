@@ -1,7 +1,7 @@
 """
-DeepAR baseline experiments for time series forecasting.
+LightGBM baseline experiments for time series forecasting.
 
-This script uses AutoGluon-TimeSeries to train a DeepAR model. A separate
+This script uses AutoGluon-TimeSeries to train a LightGBM model. A separate
 model is trained per pollutant group (grouped by the trailing token of each
 series' item_id, e.g. "site_ABD9_NO2" -> "NO2").
 
@@ -10,9 +10,9 @@ At inference time, each test window is fed as an independent series so that
 AutoGluon predicts from the end of each context window.
 
 Usage:
-    python experiments/deepar.py
-    python experiments/deepar.py --dataset "SG_Weather/D" --terms short medium long
-    python experiments/deepar.py --dataset all_datasets
+    python experiments/LightGBM.py
+    python experiments/LightGBM.py --dataset "SG_Weather/D" --terms short medium long
+    python experiments/LightGBM.py --dataset all_datasets
 """
 
 import argparse
@@ -59,18 +59,18 @@ def _entries_to_ag_df(entries, freq):
     return pd.concat(frames, ignore_index=True)
 
 
-def run_deepar_experiment(
+def run_lightgbm_experiment(
     dataset_name: str,
     terms: list[str] = None,
     output_dir: str | None = None,
     context_length: int | None = None,
     config_path: Path | None = None,
     quantile_levels: list[float] | None = None,
-    max_epochs: int = 100,
-    early_stopping_patience: int = 10,
+    num_boost_round: int = 1000,
+    early_stopping: int = 0,
 ):
     """
-    Train one DeepAR model per pollutant group and save quantile
+    Train one LightGBM model per pollutant group and save quantile
     forecasts on the test split.
     """
     print("Loading configuration...")
@@ -82,14 +82,14 @@ def run_deepar_experiment(
             raise ValueError(f"No terms defined for dataset '{dataset_name}' in config")
 
     if output_dir is None:
-        output_dir = "./output/results/deepar"
+        output_dir = "./output/results/lightgbm"
     os.makedirs(output_dir, exist_ok=True)
 
     if quantile_levels is None:
         quantile_levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
     print(f"\n{'='*60}")
-    print(f"Model: DeepAR (AutoGluon)")
+    print(f"Model: LightGBM (AutoGluon)")
     print(f"Dataset: {dataset_name}")
     print(f"Terms: {terms}")
     print(f"{'='*60}")
@@ -165,7 +165,7 @@ def run_deepar_experiment(
 
         for p_idx, (pollutant, series_indices) in enumerate(pollutant_items, 1):
             print(
-                f"\n  ===== [{p_idx}/{num_pollutants}] Training DeepAR for "
+                f"\n  ===== [{p_idx}/{num_pollutants}] Training LightGBM for "
                 f"pollutant '{pollutant}' on {len(series_indices)} series ====="
             )
 
@@ -176,21 +176,21 @@ def run_deepar_experiment(
                 train_df, id_column="item_id", timestamp_column="timestamp",
             )
 
-            # --- Fit DeepAR ---
+            # --- Fit LightGBM ---
             predictor = TimeSeriesPredictor(
                 prediction_length=h,
                 quantile_levels=quantile_levels,
                 verbosity=1,
             )
+            gbm_hyperparams = {"num_boost_round": num_boost_round}
+            if early_stopping > 0:
+                gbm_hyperparams["early_stop"] = early_stopping
             hyperparams = {
-                "DeepAR": {
-                    "max_epochs": max_epochs,
+                "DirectTabular": {
+                    "model_name": "GBM",
+                    "model_hyperparameters": gbm_hyperparams,
                 },
             }
-            if early_stopping_patience > 0:
-                hyperparams["DeepAR"]["early_stopping_patience"] = early_stopping_patience
-            if context_length is not None:
-                hyperparams["DeepAR"]["context_length"] = context_length
 
             t0 = time.perf_counter()
             predictor.fit(train_tsdf, hyperparameters=hyperparams)
@@ -239,10 +239,10 @@ def run_deepar_experiment(
         # Save results
         ds_config = f"{dataset_name}/{term}"
         model_hyperparams = {
-            "model": "DeepAR",
+            "model": "LightGBM",
             "context_length": effective_context_length,
-            "max_epochs": max_epochs,
-            "early_stopping_patience": early_stopping_patience,
+            "num_boost_round": num_boost_round,
+            "early_stopping": early_stopping,
             "season_length": season_length,
             "quantile_levels": quantile_levels,
         }
@@ -266,7 +266,7 @@ def run_deepar_experiment(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run DeepAR (AutoGluon) experiments")
+    parser = argparse.ArgumentParser(description="Run LightGBM (AutoGluon) experiments")
     parser.add_argument("--dataset", type=str, nargs="+", default=["Port_Activity/D"],
                         help="Dataset name(s) or 'all_datasets'")
     parser.add_argument("--terms", type=str, nargs="+", default=None,
@@ -275,12 +275,13 @@ def main():
     parser.add_argument("--output-dir", type=str, default=None,
                         help="Output directory for results")
     parser.add_argument("--context-length", type=int, default=None,
-                        help="Context length fed to DeepAR. Defaults to prediction_length.")
+                        help="Context length fed to LightGBM. Defaults to prediction_length.")
     parser.add_argument("--config", type=str, default=None,
                         help="Path to datasets.yaml config file")
-    parser.add_argument("--max-epochs", type=int, default=100, help="Max training epochs")
-    parser.add_argument("--early-stopping-patience", type=int, default=10,
-                        help="Epochs without val loss improvement before stopping (0 to disable)")
+    parser.add_argument("--num-boost-round", type=int, default=1000,
+                        help="Number of boosting rounds for LightGBM")
+    parser.add_argument("--early-stopping", type=int, default=0,
+                        help="Early stopping rounds (0 to disable)")
     parser.add_argument("--quantiles", type=float, nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
                         help="Quantile levels to save")
@@ -305,15 +306,15 @@ def main():
         print(f"{'#'*60}")
 
         try:
-            run_deepar_experiment(
+            run_lightgbm_experiment(
                 dataset_name=dataset_name,
                 terms=args.terms,
                 output_dir=args.output_dir,
                 context_length=args.context_length,
                 config_path=config_path,
                 quantile_levels=args.quantiles,
-                max_epochs=args.max_epochs,
-                early_stopping_patience=args.early_stopping_patience,
+                num_boost_round=args.num_boost_round,
+                early_stopping=args.early_stopping,
             )
         except Exception as e:
             print(f"ERROR: Failed to run experiment for {dataset_name}: {e}")
