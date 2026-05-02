@@ -126,14 +126,14 @@ models:
   #     context_length: 168
   #     n_jobs: 16
 
-  # deepar:
-  #   script: experiments/deepar.py
-  #   packages:
-  #     - autogluon.timeseries
-  #   args:
-  #     context_length: 168
-  #     max_epochs: 100
-  #     early_stopping_patience: 10
+  deepar:
+    script: experiments/deepar.py
+    packages:
+      - autogluon.timeseries
+    args:
+      context_length: 168
+      max_epochs: 100
+      early_stopping_patience: 10
 
   # dlinear:
   #   script: experiments/dlinear.py
@@ -163,6 +163,8 @@ models:
     args:
       num_boost_round: 1000
       early_stopping: 10
+
+
   # kairos:
   #   script: experiments/kairos_model.py
   #   git_clone:
@@ -181,14 +183,14 @@ models:
     
 # Default datasets to run when no dataset= override is given
 datasets:
-  # - CPCB/H
+  - CPCB/H
   - AURN/H
-  # - EPA/H
-  # # - CNEMC/H 
-  # - SINAICA/H
-  # - EEA_DE/H
-  # - EEA_FR/H
-  # - CNEMC_SMALL/H
+  - EPA/H
+  #### - CNEMC/H 
+  - SINAICA/H
+  - EEA_DE/H
+  - EEA_FR/H
+  - CNEMC_SMALL/H
 
 # Leaderboard settings
 leaderboard:

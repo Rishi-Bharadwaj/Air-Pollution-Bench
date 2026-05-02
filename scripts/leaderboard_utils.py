@@ -30,6 +30,8 @@ MODEL_GROUPS: dict[str, str] = {
     # ML Baselines
     "patchtst": "ML Baselines",
     "dlinear": "ML Baselines",
+    "lightbgm": "ML Baselines",
+    "deepar": "ML Baselines",
     # Statistical Baselines
     "seasonal_naive": "Statistical Baselines",
     "auto_ets": "Statistical Baselines",
@@ -149,6 +151,7 @@ def to_latex_table(
         "\\begin{table}[H]",
         f"\\caption{{{_escape(caption)}}}",
         "\\centering",
+        "\\begin{small}",
         f"\\begin{{tabular}}{{{col_spec}}}",
         "\\toprule",
         header,
@@ -156,5 +159,6 @@ def to_latex_table(
         *body_lines,
         "\\bottomrule",
         "\\end{tabular}",
+        "\\end{small}",
         "\\end{table}",
     ])
