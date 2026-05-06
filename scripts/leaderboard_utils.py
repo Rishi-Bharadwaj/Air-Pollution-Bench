@@ -7,14 +7,34 @@ def extract_pollutant(item_id: str) -> str:
 
 
 _DATASET_NAME_MAP = {
-    "CNEMC": "CNEMC SMALL",
+    "CNEMC_SMALL": "CNEMC",
+}
+
+# Standardised display names: raw model key -> "ModelName-Version" format.
+MODEL_DISPLAY_NAMES: dict[str, str] = {
+    "chronos_bolt_base": "Chronos-Bolt",
+    "chronos2_base": "Chronos-2",
+    "moirai_base": "Moirai-1",
+    "moirai2": "Moirai-2",
+    "TimesFM-1.0": "TimesFM-1.0",
+    "TimesFM-2.0": "TimesFM-2.0",
+    "TimesFM-2.5": "TimesFM-2.5",
+    "TiRex": "TiRex",
+    "visiontspp_base": "VisionTS++",
+    "sundial_base": "Sundial",
+    "kairos": "Kairos",
+    "patchtst": "PatchTST",
+    "dlinear": "DLinear",
+    "lightgbm": "LightGBM",
+    "deepar": "DeepAR",
+    "seasonal_naive": "Seasonal Naive",
+    "auto_ets": "AutoETS",
 }
 
 
 # Model category groupings for leaderboard tables.
 # Edit these to match your actual model names.
 MODEL_GROUPS: dict[str, str] = {
-        
     # TSFMs
     "chronos_bolt_base": "TSFMs",
     "chronos2_base": "TSFMs",
@@ -30,25 +50,28 @@ MODEL_GROUPS: dict[str, str] = {
     # ML Baselines
     "patchtst": "ML Baselines",
     "dlinear": "ML Baselines",
-    "lightbgm": "ML Baselines",
+    "lightgbm": "ML Baselines",
     "deepar": "ML Baselines",
     # Statistical Baselines
     "seasonal_naive": "Statistical Baselines",
     "auto_ets": "Statistical Baselines",
-
 }
 
 GROUP_ORDER: list[str] = ["TSFMs", "ML Baselines", "Statistical Baselines"]
 
 
+def display_model(raw_name: str) -> str:
+    """Return a standardised display name for a model."""
+    return MODEL_DISPLAY_NAMES.get(raw_name, raw_name)
+
+
 def display_dataset(dataset_id: str) -> str:
     """Return a human-readable dataset name, stripping frequency suffix and mapping aliases.
 
-    E.g. 'CPCB/H' -> 'CPCB', 'CNEMC/H' -> 'CNEMC SMALL', 'MY_DS/D' -> 'MY DS'
+    E.g. 'CPCB/H' -> 'CPCB', 'CNEMC_SMALL/H' -> 'CNEMC', 'MY_DS/D' -> 'MY DS'
     """
     name = dataset_id.split("/")[0]
-    name = _DATASET_NAME_MAP.get(name, name)
-    return name.replace("_", " ")
+    return _DATASET_NAME_MAP.get(name, name.replace("_", " "))
 
 
 
@@ -74,12 +97,16 @@ def to_latex_table(
     Models not in model_groups are placed in an "Other" group at the end.
     """
     df = df.reset_index(drop=True).copy()
+    if "model" in df.columns:
+        df["model"] = df["model"].map(display_model)
     if metric_cols is None:
         metric_cols = [c for c in df.columns if c != "model"]
 
     # Group-based reordering: sort by (group order, model name alphabetically)
     group_labels = None
     if model_groups is not None and "model" in df.columns:
+        # Remap group keys to display names so lookup works after renaming
+        model_groups = {display_model(k): v for k, v in model_groups.items()}
         if group_order is None:
             group_order = GROUP_ORDER
         go_idx = {g: i for i, g in enumerate(group_order)}
@@ -116,7 +143,7 @@ def to_latex_table(
             s = _escape(str(val))
         else:
             try:
-                s = f"{float(val):.3f}"
+                s = f"{float(val):.4f}"
             except (ValueError, TypeError):
                 s = str(val)
         if fmt == "bold":

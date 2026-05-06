@@ -188,7 +188,7 @@ def _save_per_dataset_horizon_tables(
     avg = (
         balanced_norm.groupby(["model", "dataset_id"], as_index=False)["MASE"]
         .mean()
-        .round(3)
+        .round(4)
     )
 
     # Pivot: rows=model, columns=dataset display name
@@ -252,7 +252,7 @@ def _save_per_pollutant_table(
         per_pol_norm.groupby(["model", "pollutant"])["MASE"]
         .agg(_gmean)
         .reset_index()
-        .round(3)
+        .round(4)
     )
 
     # Pivot: rows=model, columns=pollutant
@@ -352,7 +352,7 @@ def get_pollutant_balanced_leaderboard(
     if sort_col in leaderboard.columns:
         leaderboard = leaderboard.sort_values(by=sort_col, ascending=True).reset_index(drop=True)
 
-    leaderboard = leaderboard.round(3)
+    leaderboard = leaderboard.round(4)
     return leaderboard
 
 
@@ -445,7 +445,7 @@ def main():
             pdf = ddf[ddf["pollutant"] == pollutant]
             agg = pdf.groupby("model")[["MASE", "CRPS", "MAE", "RMSE"]].mean().reset_index()
             agg = agg.sort_values(by=metric, ascending=True).reset_index(drop=True)
-            agg = agg.round(3)
+            agg = agg.round(4)
 
             print(f"\n  {'─' * 40}")
             print(f"    Pollutant: {pollutant}")
