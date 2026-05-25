@@ -389,7 +389,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)
-    print("AirBench Local Leaderboard Calculator")
+    print("AtmoBench Local Leaderboard Calculator")
     print("=" * 80)
     if dataset_filter:
         print(f"  Filtering to datasets: {dataset_filter}")
