@@ -1,0 +1,4 @@
+file,missingness_pct,max_gap_hours
+station_47_Ozone.csv,1.1937,39
+station_47_PM2.5.csv,3.9082,118
+station_305_PM10.csv,12.7281,123

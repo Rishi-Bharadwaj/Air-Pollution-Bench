@@ -1,0 +1,34 @@
+\begin{table}[H]
+\caption{Pollutant-balanced leaderboard (\textless{} 30\textbackslash\{\}\% imputation)}
+\centering
+\begin{small}
+\begin{tabular}{lrr}
+\toprule
+model & MASE (norm.) & CRPS (norm.) \\
+\midrule
+\multicolumn{3}{l}{\textbf{TSFMs}} \\
+Chronos-2 & 0.7929 & 0.4654 \\
+Chronos-Bolt & 0.7976 & 0.4999 \\
+Kairos & 1.0121 & 0.6426 \\
+Moirai-1 & 0.8103 & 0.4670 \\
+Moirai-2 & 0.7916 & \underline{0.4421} \\
+Sundial & 0.7977 & 0.5728 \\
+TiRex & \underline{0.7825} & 0.4553 \\
+TimesFM-1.0 & 0.8298 & 0.5133 \\
+TimesFM-2.0 & 0.8013 & 0.4807 \\
+TimesFM-2.5 & \textit{0.7831} & \textbf{0.4385} \\
+VisionTS++ & \textbf{0.7785} & \textit{0.4537} \\
+\midrule
+\multicolumn{3}{l}{\textbf{ML Baselines}} \\
+DLinear & 0.8999 & 0.5652 \\
+DeepAR & 0.9091 & 0.4911 \\
+LightGBM & 0.9268 & 0.5765 \\
+PatchTST & 0.8300 & 0.4625 \\
+\midrule
+\multicolumn{3}{l}{\textbf{Statistical Baselines}} \\
+AutoETS & 0.8949 & 0.7878 \\
+Seasonal Naive & 1.0000 & 1.0000 \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{table}

@@ -1,0 +1,34 @@
+\begin{table}[H]
+\caption{PM10 leaderboard --- CNEMC}
+\centering
+\begin{small}
+\begin{tabular}{lrrrr}
+\toprule
+model & MASE & CRPS & MAE & RMSE \\
+\midrule
+\multicolumn{5}{l}{\textbf{TSFMs}} \\
+Chronos-2 & 0.8578 & 0.2956 & 21.9341 & 51.5149 \\
+Chronos-Bolt & 0.8752 & 0.3041 & 22.6953 & 55.9972 \\
+Kairos & 0.9830 & 0.3579 & 25.0796 & 52.2222 \\
+Moirai-1 & 0.8614 & 0.3030 & 22.0131 & 49.4929 \\
+Moirai-2 & 0.8450 & \underline{0.2885} & 21.3435 & \textit{48.4513} \\
+Sundial & 0.8622 & 0.3296 & 22.0848 & 48.7130 \\
+TiRex & 0.8396 & 0.2919 & \textit{21.2401} & \underline{48.1262} \\
+TimesFM-1.0 & 0.8755 & 0.3102 & 22.3029 & 49.2959 \\
+TimesFM-2.0 & 0.8574 & 0.3018 & 21.7845 & 48.5595 \\
+TimesFM-2.5 & \textit{0.8377} & \textit{0.2885} & \underline{21.1099} & \textbf{47.9519} \\
+VisionTS++ & \underline{0.8353} & 0.2897 & 21.2844 & 48.5833 \\
+\midrule
+\multicolumn{5}{l}{\textbf{ML Baselines}} \\
+DLinear & 0.8568 & 0.3015 & 22.2955 & 49.0059 \\
+DeepAR & 0.8821 & 0.3088 & 22.5933 & 49.9969 \\
+LightGBM & 0.9098 & 0.3168 & 23.4473 & 50.9778 \\
+PatchTST & \textbf{0.8334} & \textbf{0.2807} & \textbf{21.0954} & 48.6239 \\
+\midrule
+\multicolumn{5}{l}{\textbf{Statistical Baselines}} \\
+AutoETS & 0.9607 & 0.3774 & 25.9289 & 54.7405 \\
+Seasonal Naive & 1.1220 & 0.4717 & 30.3082 & 65.9088 \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{table}

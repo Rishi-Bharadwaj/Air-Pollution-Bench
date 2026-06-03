@@ -1,0 +1,34 @@
+\begin{table}[H]
+\caption{Ozone leaderboard --- CPCB}
+\centering
+\begin{small}
+\begin{tabular}{lrrrr}
+\toprule
+model & MASE & CRPS & MAE & RMSE \\
+\midrule
+\multicolumn{5}{l}{\textbf{TSFMs}} \\
+Chronos-2 & \underline{0.9423} & \textit{0.2266} & \textit{7.4354} & 13.7858 \\
+Chronos-Bolt & 0.9739 & 0.2337 & 7.5221 & 13.8563 \\
+Kairos & 2.6636 & 0.4313 & 14.7043 & 23.7030 \\
+Moirai-1 & 1.0567 & 0.2422 & 7.8403 & 14.2222 \\
+Moirai-2 & 0.9789 & 0.2272 & 7.5333 & 13.8471 \\
+Sundial & 0.9909 & 0.2591 & 7.6890 & 13.7808 \\
+TiRex & \textbf{0.9391} & \underline{0.2263} & \underline{7.3793} & \underline{13.6980} \\
+TimesFM-1.0 & 1.1591 & 0.2536 & 8.1274 & 14.5997 \\
+TimesFM-2.0 & 1.0246 & 0.2426 & 7.7659 & 14.1007 \\
+TimesFM-2.5 & 0.9578 & 0.2279 & 7.4962 & \textit{13.7385} \\
+VisionTS++ & \textit{0.9534} & \textbf{0.2240} & \textbf{7.3577} & \textbf{13.6291} \\
+\midrule
+\multicolumn{5}{l}{\textbf{ML Baselines}} \\
+DLinear & 1.5990 & 0.2816 & 7.9252 & 13.8600 \\
+DeepAR & 2.1098 & 0.2424 & 7.9193 & 14.1435 \\
+LightGBM & 1.0854 & 0.2533 & 7.7494 & 14.0969 \\
+PatchTST & 1.2962 & 0.2388 & 7.7170 & 13.8499 \\
+\midrule
+\multicolumn{5}{l}{\textbf{Statistical Baselines}} \\
+AutoETS & 1.0750 & 0.3011 & 8.6509 & 14.6753 \\
+Seasonal Naive & 1.1367 & 0.3663 & 9.1527 & 16.8007 \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{table}

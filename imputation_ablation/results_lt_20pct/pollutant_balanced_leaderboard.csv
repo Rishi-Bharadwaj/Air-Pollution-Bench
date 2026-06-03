@@ -1,0 +1,18 @@
+model,MASE (norm.),CRPS (norm.)
+visiontspp_base,0.7795,0.4523
+TiRex,0.7834,0.4545
+TimesFM-2.5,0.7842,0.4364
+moirai2,0.7927,0.4413
+chronos2_base,0.7937,0.4662
+chronos_bolt_base,0.7982,0.5002
+sundial_base,0.7988,0.5779
+TimesFM-2.0,0.8021,0.482
+moirai_base,0.8116,0.4655
+patchtst,0.8161,0.4613
+TimesFM-1.0,0.8293,0.5182
+dlinear,0.8844,0.5644
+deepar,0.8857,0.4973
+auto_ets,0.8955,0.7863
+lightgbm,0.9216,0.5827
+seasonal_naive,1.0,1.0
+kairos,1.0189,0.6469

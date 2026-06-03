@@ -1,0 +1,34 @@
+\begin{table}[H]
+\caption{Normalized MASE per dataset}
+\centering
+\begin{small}
+\begin{tabular}{lrrrrrrr}
+\toprule
+model & AURN & CNEMC & CPCB & EEA DE & EEA FR & EPA & SINAICA \\
+\midrule
+\multicolumn{8}{l}{\textbf{TSFMs}} \\
+Chronos-2 & 0.7774 & 0.7854 & 0.8163 & 0.7779 & 0.7759 & 0.7886 & 0.8302 \\
+Chronos-Bolt & 0.7795 & 0.7915 & 0.8303 & 0.7818 & 0.7769 & 0.7904 & 0.8347 \\
+Kairos & 0.8721 & 1.0057 & 1.2579 & 0.9385 & 0.9471 & 0.9975 & 1.1117 \\
+Moirai-1 & 0.7855 & 0.7961 & 0.8542 & 0.7934 & 0.7904 & 0.8043 & 0.8514 \\
+Moirai-2 & 0.7687 & 0.7805 & 0.8181 & 0.7788 & 0.7754 & 0.7899 & 0.8321 \\
+Sundial & 0.7685 & 0.7920 & 0.8265 & 0.7828 & 0.7791 & 0.7961 & 0.8414 \\
+TiRex & \underline{0.7582} & \textit{0.7759} & \underline{0.8083} & \underline{0.7669} & \underline{0.7638} & \underline{0.7780} & \underline{0.8291} \\
+TimesFM-1.0 & 0.7896 & 0.8161 & 0.8822 & 0.8413 & 0.7944 & 0.8309 & 0.8579 \\
+TimesFM-2.0 & 0.7711 & 0.7916 & 0.8369 & 0.7939 & 0.7759 & 0.8013 & 0.8409 \\
+TimesFM-2.5 & \textit{0.7592} & \underline{0.7739} & \textit{0.8105} & \textit{0.7674} & \textit{0.7642} & \textit{0.7801} & \textit{0.8292} \\
+VisionTS++ & \textbf{0.7563} & \textbf{0.7702} & \textbf{0.8073} & \textbf{0.7642} & \textbf{0.7601} & \textbf{0.7749} & \textbf{0.8186} \\
+\midrule
+\multicolumn{8}{l}{\textbf{ML Baselines}} \\
+DLinear & 0.7874 & 0.8238 & 1.1438 & 1.0870 & 0.7974 & 0.8561 & 0.8683 \\
+DeepAR & 0.7860 & 0.8432 & 1.3517 & 0.8584 & 0.8414 & 0.8927 & 0.8881 \\
+LightGBM & 0.8273 & 0.8599 & 0.9991 & 1.3366 & 0.8421 & 0.8398 & 0.8741 \\
+PatchTST & 0.7605 & 0.7874 & 1.0544 & 0.8176 & 0.7803 & 0.8014 & 0.8403 \\
+\midrule
+\multicolumn{8}{l}{\textbf{Statistical Baselines}} \\
+AutoETS & 0.8707 & 0.8865 & 0.9066 & 0.8807 & 0.8812 & 0.9071 & 0.9329 \\
+Seasonal Naive & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 & 1.0000 \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{table}
