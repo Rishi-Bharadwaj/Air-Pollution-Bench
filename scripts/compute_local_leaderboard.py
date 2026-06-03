@@ -81,7 +81,7 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
     Returns:
         DataFrame with columns ["model", "dataset_id", "horizon", "pollutant", "MASE", "CRPS", "MAE", "RMSE"]
     """
-    THRESHOLD = 50
+    THRESHOLD = 2
 
     # --- Pass 1: collect per-site MASE and CRPS across all models, then exclude by mean ---
     # Key: (dataset_id, horizon, item_id) -> list of values across models
@@ -163,6 +163,8 @@ def get_per_pollutant_results(results_root: Path, dataset_filter: list[str] = No
                 batch[metric_name] = per_series.tolist()
             else:
                 batch[metric_name] = [np.nan] * n_series
+                print("Error")
+                exit()
         rows.append(pd.DataFrame(batch))
 
     if not rows:
