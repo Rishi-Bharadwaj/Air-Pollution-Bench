@@ -12,7 +12,7 @@ Output is written to imputation_ablation/results_lt_<X>pct/.
 
 import sys
 from pathlib import Path
-
+from time import sleep
 import pandas as pd
 import numpy as np
 
@@ -257,6 +257,7 @@ def main():
 
     for t in thresholds:
         run_for_threshold(t, metric=args.metric)
+        sleep(10)
 
     print("\nDone.")
 
