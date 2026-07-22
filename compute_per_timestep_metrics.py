@@ -231,22 +231,130 @@ def verify_all() -> None:
     print(f"\nMax MSE diff: {max_mse:.2e}  |  Max MAE diff: {max_mae:.2e}  (both should be ~0)")
 
 
+# ─── Debug Verify ─────────────────────────────────────────────────────────────
+def debug_verify_all() -> None:
+    """
+    Extended verification: for each experiment find the worst (s, w, v) and compare
+    the actual mae_diff against the theoretical float16 quantisation contribution.
+    Uses only already-saved .npz and config.json files — no HF dataset access needed.
+    """
+    header = (
+        f"{'model':<24}  {'dataset':<14}  {'term':<6}  {'scale':>6}  "
+        f"{'max_pred':>10}  {'exp_f16_mae':>12}  {'mae_diff':>10}  {'item_id'}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    global_worst = None  # (mae_diff, exp_dir, worst_s, worst_w, worst_v)
+
+    for exp_dir in discover_experiments():
+        pt_path   = exp_dir / "per_timestep_metrics.npz"
+        m_path    = exp_dir / "metrics.npz"
+        pred_path = exp_dir / "predictions.npz"
+        cfg_path  = exp_dir / "config.json"
+        if not (pt_path.exists() and m_path.exists() and pred_path.exists() and cfg_path.exists()):
+            continue
+
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+
+        scale           = cfg.get("prediction_scale_factor", 1.0)
+        item_ids        = cfg.get("item_ids", [])
+        quantile_levels = cfg.get("quantile_levels", [])
+        median_idx      = quantile_levels.index(0.5) if 0.5 in quantile_levels else 4
+
+        pt = np.load(pt_path)
+        m  = np.load(m_path)
+        pq = np.load(pred_path)["predictions_quantiles"]  # float16, (S, W, Q, V, P)
+
+        mae_diff_arr = np.abs(np.nanmean(pt["MAE"], axis=-1) - m["MAE"])  # (S, W, V)
+        flat_idx     = int(np.nanargmax(mae_diff_arr))
+        worst_s, worst_w, worst_v = np.unravel_index(flat_idx, mae_diff_arr.shape)
+        worst_mae_diff = float(mae_diff_arr[worst_s, worst_w, worst_v])
+
+        # Float16 quantisation contribution at the worst (s, w, v)
+        pred_f16 = pq[worst_s, worst_w, median_idx, worst_v, :].astype(np.float64) * scale
+        # ULP-based estimate: for each already-quantised float16 value, the next
+        # representable float16 gives the step size; original float64 pred lies within
+        # ±ULP/2 of the stored value.  Expected |error| per step ~ ULP/2.
+        ulp = np.array([
+            abs(float(np.nextafter(np.float16(v / scale), np.float16(np.inf)))
+                - float(np.float16(v / scale))) * scale
+            if np.isfinite(np.float16(v / scale)) else np.nan
+            for v in pred_f16
+        ])
+        exp_f16_mae = float(np.nanmean(ulp / 2))
+        max_pred    = float(np.abs(pred_f16).max())
+
+        iid = item_ids[worst_s] if worst_s < len(item_ids) else f"s={worst_s}"
+        rel = exp_dir.relative_to(RESULTS_ROOT).parts
+        model, ds, term = rel[0], f"{rel[1]}/{rel[2]}", rel[3]
+
+        print(
+            f"{model:<24}  {ds:<14}  {term:<6}  {scale:>6.0f}  "
+            f"{max_pred:>10.1f}  {exp_f16_mae:>12.4f}  {worst_mae_diff:>10.4f}  {iid}"
+        )
+
+        if global_worst is None or worst_mae_diff > global_worst[0]:
+            global_worst = (worst_mae_diff, exp_dir, worst_s, worst_w, worst_v,
+                            cfg, pq, pt, m, exp_f16_mae, max_pred, scale, median_idx)
+
+    if global_worst is None:
+        print("No experiments found.")
+        return
+
+    (worst_mae_diff, exp_dir, worst_s, worst_w, worst_v,
+     cfg, pq, pt, m, exp_f16_mae, max_pred, scale, median_idx) = global_worst
+
+    item_ids        = cfg.get("item_ids", [])
+    quantile_levels = cfg.get("quantile_levels", [])
+    iid             = item_ids[worst_s] if worst_s < len(item_ids) else f"s={worst_s}"
+
+    print(f"\n{'─'*70}")
+    print(f"Drill-down: {exp_dir.relative_to(RESULTS_ROOT)}")
+    print(f"  worst (s={worst_s}, w={worst_w}, v={worst_v})  item_id: {iid}")
+    print(f"  scale_factor         : {scale}")
+    print(f"  max |pred| at (s,w,v): {max_pred:.2f}")
+    print(f"  expected f16 MAE     : {exp_f16_mae:.4f}  (mean round-trip error per step)")
+    print(f"  actual   mae_diff    : {worst_mae_diff:.4f}")
+    ratio = worst_mae_diff / exp_f16_mae if exp_f16_mae > 0 else float("inf")
+    print(f"  ratio actual/f16     : {ratio:.2f}  (≈1 → float16; >>1 → other cause)")
+    print(f"  win_MAE  (metrics.npz)  : {float(m['MAE'][worst_s, worst_w, worst_v]):.4f}")
+    print(f"  pt_MAE   (pt_npz mean)  : {float(np.nanmean(pt['MAE'][worst_s, worst_w, worst_v])):.4f}")
+
+    # Show first few lead-time values of the prediction for the worst window
+    pred_f16 = pq[worst_s, worst_w, median_idx, worst_v, :].astype(np.float64) * scale
+    ulp_worst = np.array([
+        abs(float(np.nextafter(np.float16(v / scale), np.float16(np.inf)))
+            - float(np.float16(v / scale))) * scale
+        if np.isfinite(np.float16(v / scale)) else np.nan
+        for v in pred_f16
+    ])
+    print(f"\n  pred (float16→f64) first 6 steps: {pred_f16[:6]}")
+    print(f"  ULP/2 (max f16 err) first 6 steps: {ulp_worst[:6] / 2}")
+    print(f"  pt_MAE per step     first 6 steps: {pt['MAE'][worst_s, worst_w, worst_v, :6]}")
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dry-run", action="store_true", help="Process only the first experiment to test")
-    parser.add_argument("--verify",  action="store_true", help="Run verification table after processing")
+    parser.add_argument("--dry-run",      action="store_true", help="Process only the first experiment to test")
+    parser.add_argument("--verify",       action="store_true", help="Run verification table after processing")
+    parser.add_argument("--debug-verify", action="store_true", help="Extended verification: diagnose float16 vs other causes")
     parser.add_argument("--workers", type=int, default=MAX_WORKERS, help=f"Parallel workers (default: {MAX_WORKERS})")
     args = parser.parse_args()
 
     datasets_config = _load_datasets_config()
-    experiments = discover_experiments()
-    print(f"Experiments to process: {len(experiments)}")
-
+    # experiments = discover_experiments()
+    
+    # print(f"Experiments to process: {len(experiments)}")
+    experiments=None
     if not experiments:
         print("Nothing to do.")
         if args.verify:
             verify_all()
+        if args.debug_verify:
+            debug_verify_all()
         return
 
     if args.dry_run:
@@ -298,6 +406,10 @@ def main() -> None:
     if args.verify:
         print()
         verify_all()
+
+    if args.debug_verify:
+        print()
+        debug_verify_all()
 
 
 if __name__ == "__main__":
